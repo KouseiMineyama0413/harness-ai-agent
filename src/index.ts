@@ -33,6 +33,7 @@ export {
   PROMPT_HISTORY_PATH,
 } from "./session/store.js";
 export { integrateClaude, integrateCodex, isClaudeHookInstalled } from "./integrations/install.js";
+export { HarnessDb, DB_PATH } from "./db/database.js";
 export { registerAdapter, getAdapters } from "./adapters/registry.js";
 export type { StackAdapter, AdapterDetection } from "./adapters/types.js";
 export { Logger } from "./core/logger.js";

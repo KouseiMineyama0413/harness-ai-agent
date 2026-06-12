@@ -18,6 +18,7 @@ import { Logger } from "./core/logger.js";
 import { gatesPassed, runGates } from "./gates/runner.js";
 import { checkCommand } from "./guardrails/commandPolicy.js";
 import { checkDiff, isGitRepo } from "./guardrails/diffBudget.js";
+import { DB_PATH, HarnessDb } from "./db/database.js";
 import { integrateClaude, integrateCodex } from "./integrations/install.js";
 import { buildGateReport, listReports, renderMarkdown, writeReport } from "./report/reporter.js";
 import {
@@ -93,8 +94,13 @@ program
       fs.mkdirSync(path.join(root, dir), { recursive: true });
     }
     const gitignore = path.join(root, ".harness", ".gitignore");
-    if (!fileExists(gitignore)) writeText(gitignore, "logs/\n");
-    logger.info("initialized .harness/ (commit reports/requirements, logs are git-ignored)");
+    if (!fileExists(gitignore)) {
+      writeText(gitignore, "logs/\ncache/\n");
+    } else {
+      const current = fs.readFileSync(gitignore, "utf8");
+      if (!current.includes("cache/")) writeText(gitignore, current.trimEnd() + "\ncache/\n");
+    }
+    logger.info("initialized .harness/ (commit reports/requirements, logs+cache are git-ignored)");
     logger.info("next: harness analyze && harness context");
     logger.info("agent setup: harness integrate claude / harness integrate codex");
   });
@@ -409,16 +415,139 @@ program
   .command("history")
   .description("show prompt history (.harness/prompt_history.jsonl)")
   .option("--limit <n>", "max entries", "50")
+  .option("--search <query>", "substring search via the SQLite index")
+  .option("--agent <name>", "filter search results to one agent (with --search)")
   .option("--json", "print JSON")
-  .action((opts: { limit: string; json?: boolean }) => {
+  .action(async (opts: { limit: string; search?: string; agent?: string; json?: boolean }) => {
     const { root } = ctx();
-    const entries = readPromptHistory(root, Number.parseInt(opts.limit, 10) || 50);
+    const limit = Number.parseInt(opts.limit, 10) || 50;
+
+    if (opts.search) {
+      const db = await HarnessDb.open(root);
+      try {
+        db.reindex();
+        const hits = db.searchPrompts(opts.search, limit, opts.agent);
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(hits, null, 2) + "\n");
+          return;
+        }
+        for (const h of hits) {
+          process.stdout.write(`[${h.ts}] ${h.agent}${h.sessionId ? ` (${h.sessionId})` : ""}: ${h.text}\n`);
+        }
+      } finally {
+        db.close();
+      }
+      return;
+    }
+
+    const entries = readPromptHistory(root, limit);
     if (opts.json) {
       process.stdout.write(JSON.stringify(entries, null, 2) + "\n");
       return;
     }
     for (const e of entries) {
       process.stdout.write(`[${e.ts}] ${e.agent}${e.sessionId ? ` (${e.sessionId})` : ""}: ${e.text}\n`);
+    }
+  });
+
+// ---------------------------------------------------------------- team (= the team of agents)
+const team = program
+  .command("team")
+  .description("the team of agents: per-agent sessions and activity (SQLite-backed)");
+
+function renderTable(header: string[], data: string[][]): string {
+  const widths = header.map((h, i) => Math.max(h.length, ...data.map((d) => d[i]!.length)));
+  const fmt = (cols: string[]) => cols.map((c, i) => c.padEnd(widths[i]!)).join("  ");
+  return [fmt(header), ...data.map(fmt)].join("\n") + "\n";
+}
+
+team
+  .command("list")
+  .description("list agents observed in sessions and prompt history")
+  .action(async () => {
+    const { root } = ctx();
+    const db = await HarnessDb.open(root);
+    try {
+      db.reindex();
+      for (const agent of db.listAgents()) process.stdout.write(agent + "\n");
+    } finally {
+      db.close();
+    }
+  });
+
+team
+  .command("activity")
+  .description("per-agent activity: sessions, prompts, decisions, last active")
+  .option("--agent <name>", "filter to one agent")
+  .option("--json", "print JSON")
+  .action(async (opts: { agent?: string; json?: boolean }) => {
+    const { root } = ctx();
+    const db = await HarnessDb.open(root);
+    try {
+      db.reindex();
+      let rows = db.agentActivity();
+      if (opts.agent) rows = rows.filter((r) => r.agent === opts.agent);
+      if (opts.json) {
+        process.stdout.write(JSON.stringify(rows, null, 2) + "\n");
+        return;
+      }
+      process.stdout.write(
+        renderTable(
+          ["agent", "sessions", "prompts", "decisions", "notes", "last active"],
+          rows.map((r) => [
+            r.agent,
+            String(r.sessions),
+            String(r.prompts),
+            String(r.decisions),
+            String(r.notes),
+            r.lastActive ?? "-",
+          ]),
+        ),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+team
+  .command("sessions <agent>")
+  .description("sessions the agent participated in, with its event footprint")
+  .option("--json", "print JSON")
+  .action(async (agent: string, opts: { json?: boolean }) => {
+    const { root } = ctx();
+    const db = await HarnessDb.open(root);
+    try {
+      db.reindex();
+      const rows = db.agentSessions(agent);
+      if (opts.json) {
+        process.stdout.write(JSON.stringify(rows, null, 2) + "\n");
+        return;
+      }
+      process.stdout.write(
+        renderTable(
+          ["session", "status", "title", "events", "last event"],
+          rows.map((r) => [r.id, r.status, r.title, String(r.events), r.lastEventAt ?? "-"]),
+        ),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+// ---------------------------------------------------------------- reindex
+program
+  .command("reindex")
+  .description(`rebuild the SQLite query index (${DB_PATH}) from the files of record`)
+  .action(async () => {
+    const { root, logger } = ctx();
+    const db = await HarnessDb.open(root);
+    try {
+      const counts = db.reindex();
+      logger.info(
+        `reindexed: ${counts.sessions} sessions, ${counts.events} events, ${counts.prompts} prompts`,
+      );
+    } finally {
+      db.close();
     }
   });
 

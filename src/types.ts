@@ -145,6 +145,28 @@ export interface SessionEvent {
   text: string;
 }
 
+/** Per-agent activity summary computed from the SQLite index. */
+export interface AgentActivity {
+  agent: string;
+  sessions: number;
+  prompts: number;
+  decisions: number;
+  notes: number;
+  lastActive: string | null;
+}
+
+/** One session as seen from a single agent's perspective. */
+export interface AgentSessionSummary {
+  id: string;
+  title: string;
+  status: "active" | "closed";
+  startedAt: string;
+  /** Events this agent recorded in the session. */
+  events: number;
+  /** Timestamp of this agent's last event in the session. */
+  lastEventAt: string | null;
+}
+
 /** A work session shared between agents (Claude, Codex, humans). */
 export interface Session {
   schemaVersion: 1;

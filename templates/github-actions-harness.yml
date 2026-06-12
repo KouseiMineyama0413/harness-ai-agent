@@ -21,7 +21,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # harness requires >= 22.5 (built-in node:sqlite)
           cache: npm
 
       # Install the target project's own toolchain first (adjust per repo).
