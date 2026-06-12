@@ -1,0 +1,122 @@
+# dev-harness
+
+あらゆるアプリケーション開発(Web / API / SaaS / CLI / AIアプリ / 業務システム)で共通利用できる、フレームワーク非依存の **development harness** です。要件定義 → 設計 → 実装 → テスト → レビュー → CI までの開発ループに、**品質ゲート**と **AIエージェント向けガードレール**を提供します。
+
+## 設計思想
+
+1. **Harness は実行者ではなく「枠組み」** — コードを書くのは人間か AI エージェント。harness はその周囲に検証可能な構造(プロファイル、ゲート、予算、レポート)を張る。
+2. **すべての知識はファイルに残す** — スタック検出結果は `project_profile.json`、実行結果は `.harness/reports/`、要件は `.harness/requirements/`。Git にコミットでき、人間がレビューできる。
+3. **推定はするが、設定が常に勝つ** — テスト/ビルドコマンドは自動推定するが、`harness.yaml` の明示設定が最優先。`command: null` で無効化も可能。
+4. **スタック知識は Adapter に隔離** — コアは「言語」を知らない。Node/Python/Go/infra の知識はそれぞれのアダプタにあり、追加=1ファイル追加。
+5. **エージェントは信頼しない** — 変更予算(ファイル数・行数)、保護パス、危険コマンドポリシー、secret 検出を機械的に強制する。
+
+## インストール
+
+```bash
+# 既存リポジトリで(リポジトリ自体には依存を追加しない)
+npm install -g @peakcode/dev-harness   # または npx で都度実行
+cd your-project
+harness init        # harness.yaml と .harness/ を生成
+harness analyze     # スタック検出 → .harness/project_profile.json
+harness context     # AIエージェント用コンテキスト生成
+harness gate run    # 品質ゲート実行 → .harness/reports/
+```
+
+## CLI
+
+| コマンド | 説明 |
+|---|---|
+| `harness init` | `harness.yaml` と `.harness/` 雛形を生成 |
+| `harness analyze [--json]` | 技術スタック検出、`project_profile.json` を生成 |
+| `harness context [--print]` | AI エージェント向け構造化コンテキスト(`context.json` / `context.md`)生成 |
+| `harness gate run [--only lint,test]` | 品質ゲート実行。失敗時 exit 1。レポートを `.harness/reports/` に保存 |
+| `harness guard check-command "<cmd>"` | コマンドを安全ポリシーで判定(allow / confirm / deny) |
+| `harness guard scan-diff [--base origin/main]` | 変更予算・保護パス・secret 混入を diff 検査 |
+| `harness req new "<title>"` | 構造化要件(acceptance criteria / NFR 付き)の雛形作成 |
+| `harness req lint <REQ-id>` | 曖昧表現・受け入れ基準欠落の検出 |
+| `harness report list` | 生成済みレポート一覧 |
+
+終了コード: `0` 成功 / `1` チェック失敗 / `2` 設定・使用方法エラー。stdout は機械可読出力、進捗等は stderr。
+
+## 品質ゲート
+
+`lint` / `typecheck` / `test` / `build` / `security` / `deps` / `coverage` の 7 種。コマンド解決順:
+
+1. `harness.yaml` の `gates.<id>.command`(`null` なら無効化)
+2. アダプタの自動推定(例: package.json の scripts、`go test ./...`、`pytest`)
+3. どちらも無ければ skip(理由付き)
+
+`security` / `deps` / `coverage` はデフォルト advisory(失敗しても全体は落とさない)。`required: true` で昇格できます。
+
+## AI エージェント連携
+
+エージェントには `.harness/context.md` をプロンプト先頭に渡してください。技術スタック、レイアウト、実行コマンド、そして**遵守必須のガードレール**(変更予算、保護パス、計画必須、secret 禁止)が含まれます。
+
+エージェント側の標準ループ:
+
+```
+harness context              # 1. コンテキスト取得
+harness req lint REQ-00x     # 2. 要件の曖昧さ確認
+(計画を提示し承認を得る)        # 3. requirePlan
+(実装)
+harness guard check-command  # 4. 危険コマンドは実行前に判定
+harness guard scan-diff      # 5. 変更が予算内か検査
+harness gate run             # 6. 品質ゲート
+(レポートを添えて diff summary を報告)
+```
+
+## 設定 (`harness.yaml`)
+
+`harness init` が生成する雛形にすべての項目とコメントがあります。主要部:
+
+```yaml
+version: 1
+project: { name: my-app }
+agent:
+  requirePlan: true
+  changeBudget: { maxFiles: 20, maxLinesAdded: 800, maxLinesDeleted: 400 }
+  protectedPaths: [.github/, infra/]
+gates:
+  test: { command: npm test -- --ci, required: true }
+  coverage: { command: npx vitest run --coverage, threshold: 80, required: false }
+context:
+  rules: ["DB スキーマ変更は必ず migration で行う"]
+```
+
+## CI 連携
+
+`templates/github-actions-harness.yml` を対象リポジトリの `.github/workflows/harness.yml` にコピーしてください。PR ごとに `guard scan-diff` + `gate run` を実行し、レポートを artifact 保存・PR コメント投稿します。GitLab CI / CircleCI も同じ CLI を呼ぶだけで対応できます。
+
+## ディレクトリ構成
+
+```
+src/
+  cli.ts                 # CLI(commander)。コアの薄いラッパ
+  index.ts               # プログラマブル API(embed 用)
+  types.ts               # 共有ドメイン型
+  config/                # harness.yaml スキーマ(zod)とローダー
+  adapters/              # スタック別アダプタ(node/python/go/infra)+ registry
+  analyze/               # プロファイル生成(.harness/project_profile.json)
+  gates/                 # 品質ゲート解決・実行
+  guardrails/            # コマンドポリシー / secret 検出 / diff 予算
+  context/               # エージェント向け構造化コンテキスト生成
+  report/                # Markdown/JSON レポート
+  requirements/          # 構造化要件と曖昧さ linter
+templates/               # CI テンプレート
+```
+
+## 拡張
+
+- **新しいスタック**: `StackAdapter` を実装し `registerAdapter()`(`src/adapters/registry.ts`)。コア変更不要。
+- **プラグイン(将来)**: `harness.yaml` の `plugins:` から外部アダプタを動的ロード。
+- **LLM Provider Adapter(将来)**: `context.json` は provider 非依存の中間表現。各 provider 向けプロンプト整形を adapter 化。
+- **追加ゲート**: `GateId` を拡張し、`defaultRequired` とアダプタ推定を追加。
+
+## 開発
+
+```bash
+npm install
+npm test          # vitest
+npm run build     # tsc → dist/
+npm run dev -- analyze   # ソースから直接実行
+```

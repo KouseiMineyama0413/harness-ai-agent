@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-12T04:08:40.192Z",
+  "root": "/Users/kosei-mineyama/src/environment/peakcode/base-harness",
+  "name": "dev-harness",
+  "technologies": [
+    {
+      "id": "node",
+      "name": "Node.js",
+      "kind": "language",
+      "evidence": [
+        "package.json"
+      ],
+      "confidence": 1
+    },
+    {
+      "id": "typescript",
+      "name": "TypeScript",
+      "kind": "language",
+      "version": "^5.5.0",
+      "evidence": [
+        "tsconfig.json",
+        "package.json"
+      ],
+      "confidence": 1
+    }
+  ],
+  "inferredCommands": {
+    "lint": "npm run lint",
+    "typecheck": "npm run typecheck",
+    "test": "npm run test",
+    "build": "npm run build",
+    "deps": "npm audit --audit-level=high",
+    "security": "npm audit --audit-level=high"
+  },
+  "layout": {
+    "src/": "application source",
+    "templates/": ""
+  },
+  "notableFiles": [
+    "package.json",
+    "tsconfig.json"
+  ],
+  "notes": []
+}

@@ -1,0 +1,42 @@
+# dev-harness configured for itself (dogfooding).
+version: 1
+
+project:
+  name: dev-harness
+  description: Framework-agnostic development harness CLI
+
+stacks: []
+
+agent:
+  requirePlan: true
+  changeBudget:
+    maxFiles: 25
+    maxLinesAdded: 1200
+    maxLinesDeleted: 600
+  protectedPaths:
+    - .github/
+    - templates/
+  deniedCommands: []
+  allowedCommands: []
+
+gates:
+  test:
+    command: npx vitest run
+    required: true
+    timeoutSec: 300
+  build:
+    command: npm run build
+    required: true
+    timeoutSec: 300
+  deps:
+    required: false
+
+context:
+  includeFiles: []
+  rules:
+    - "Keep adapters self-contained: stack knowledge never leaks into core modules."
+    - "stdout is machine-readable output only; human messages go to stderr via Logger."
+
+report:
+  dir: .harness/reports
+  formats: [md, json]

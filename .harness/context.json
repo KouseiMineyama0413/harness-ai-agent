@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-12T04:08:40.194Z",
+  "project": {
+    "name": "dev-harness",
+    "root": "/Users/kosei-mineyama/src/environment/peakcode/base-harness",
+    "technologies": [
+      {
+        "id": "node",
+        "name": "Node.js",
+        "kind": "language",
+        "evidence": [
+          "package.json"
+        ],
+        "confidence": 1
+      },
+      {
+        "id": "typescript",
+        "name": "TypeScript",
+        "kind": "language",
+        "version": "^5.5.0",
+        "evidence": [
+          "tsconfig.json",
+          "package.json"
+        ],
+        "confidence": 1
+      }
+    ],
+    "layout": {
+      "src/": "application source",
+      "templates/": ""
+    },
+    "notableFiles": [
+      "package.json",
+      "tsconfig.json"
+    ]
+  },
+  "commands": {
+    "lint": "npm run lint",
+    "typecheck": "npm run typecheck",
+    "test": "npx vitest run",
+    "build": "npm run build",
+    "deps": "npm audit --audit-level=high",
+    "security": "npm audit --audit-level=high"
+  },
+  "guardrails": {
+    "changeBudget": {
+      "maxFiles": 25,
+      "maxLinesAdded": 1200,
+      "maxLinesDeleted": 600
+    },
+    "protectedPaths": [
+      ".github/",
+      "templates/"
+    ],
+    "requirePlan": true,
+    "rules": [
+      "Present a plan and get approval before making changes (requirePlan).",
+      "Stay within the change budget; split larger work into separate reviewed steps.",
+      "Never modify protected paths without explicit human sign-off.",
+      "Run `harness guard check-command \"<cmd>\"` before any risky shell command.",
+      "Run `harness gate run` after changes and include results in your summary.",
+      "Never print or commit secrets/credentials; use placeholders and .env files.",
+      "After changes, produce a diff summary: files touched, why, and risks.",
+      "Keep adapters self-contained: stack knowledge never leaks into core modules.",
+      "stdout is machine-readable output only; human messages go to stderr via Logger."
+    ]
+  }
+}
