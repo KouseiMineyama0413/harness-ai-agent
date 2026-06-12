@@ -8,6 +8,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import type { HarnessConfig } from "../config/schema.js";
 import { writeJson, writeText } from "../core/fsutil.js";
+import { getActiveSession, loadEvents, PROMPT_HISTORY_PATH } from "../session/store.js";
 import type { AgentContext, ProjectProfile } from "../types.js";
 
 const BASE_RULES = [
@@ -67,6 +68,16 @@ export function generateContext(
     git: gitInfo(root),
   };
 
+  const session = getActiveSession(root);
+  if (session) {
+    context.session = {
+      id: session.id,
+      title: session.title,
+      agents: session.agents,
+      recentEvents: loadEvents(root, session.id).slice(-config.session.contextEvents),
+    };
+  }
+
   writeJson(path.join(root, ".harness", "context.json"), context);
   writeText(path.join(root, ".harness", "context.md"), renderContextMarkdown(context, profile));
   return context;
@@ -118,6 +129,23 @@ export function renderContextMarkdown(ctx: AgentContext, profile: ProjectProfile
   if (ctx.git) {
     lines.push("## Git");
     lines.push(`- branch: ${ctx.git.branch}, uncommitted files: ${ctx.git.dirtyFiles}`);
+    lines.push("");
+  }
+
+  if (ctx.session) {
+    lines.push("## Active session (shared between agents)");
+    lines.push(
+      `- ${ctx.session.id} "${ctx.session.title}" — agents so far: ${ctx.session.agents.join(", ")}`,
+    );
+    lines.push(
+      `- You are joining this session. Log decisions with \`harness session decision\`; write \`harness session handoff\` before stopping. Prompt history: \`${PROMPT_HISTORY_PATH}\``,
+    );
+    if (ctx.session.recentEvents.length > 0) {
+      lines.push("- Recent events:");
+      for (const e of ctx.session.recentEvents) {
+        lines.push(`  - [${e.ts}] ${e.agent} ${e.kind}: ${e.text}`);
+      }
+    }
     lines.push("");
   }
 

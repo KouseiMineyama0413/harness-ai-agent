@@ -34,6 +34,12 @@ harness gate run    # 品質ゲート実行 → .harness/reports/
 | `harness guard scan-diff [--base origin/main]` | 変更予算・保護パス・secret 混入を diff 検査 |
 | `harness req new "<title>"` | 構造化要件(acceptance criteria / NFR 付き)の雛形作成 |
 | `harness req lint <REQ-id>` | 曖昧表現・受け入れ基準欠落の検出 |
+| `harness session start "<task>" --agent claude` | エージェント共有セッション開始 |
+| `harness session prompt/note/decision "<text>"` | セッションへイベント記録(prompt は履歴にも保存) |
+| `harness session handoff --agent codex` | 次のエージェント向け引き継ぎドキュメント生成 |
+| `harness session list / show / end` | セッション管理 |
+| `harness history [--limit 50]` | prompt 履歴の閲覧 |
+| `harness integrate claude\|codex` | エージェント統合のインストール(hook / AGENTS.md) |
 | `harness report list` | 生成済みレポート一覧 |
 
 終了コード: `0` 成功 / `1` チェック失敗 / `2` 設定・使用方法エラー。stdout は機械可読出力、進捗等は stderr。
@@ -47,6 +53,35 @@ harness gate run    # 品質ゲート実行 → .harness/reports/
 3. どちらも無ければ skip(理由付き)
 
 `security` / `deps` / `coverage` はデフォルト advisory(失敗しても全体は落とさない)。`required: true` で昇格できます。
+
+## セッション共有と prompt 履歴(Claude ⇄ Codex)
+
+複数のエージェントが**同じセッションをファイル経由で共有**します。状態はすべて `.harness/` 配下のプレーンファイルなので、リポジトリを読めるツールなら何でも参加できます。
+
+```
+.harness/sessions/S-001.json           # セッションメタ(参加エージェント、状態)
+.harness/sessions/S-001.events.jsonl   # 追記専用イベントログ(prompt/note/decision/handoff)
+.harness/sessions/S-001.handoff.md     # 引き継ぎドキュメント
+.harness/prompt_history.jsonl          # prompt 履歴(セッション横断・デフォルト有効)
+```
+
+典型フロー — Claude が作業を始め、Codex が引き継ぐ:
+
+```bash
+# Claude 側
+harness session start "CSVエクスポート実装" --agent claude
+harness session decision "ストリーミング書き出しにする" --agent claude
+harness session handoff --agent claude        # 引き継ぎ文書を生成
+
+# Codex 側(同じリポジトリで)
+harness context                               # context.md にアクティブセッションと直近イベントが載る
+harness session note "テストから再開" --agent codex   # 自動的に同じセッションに参加
+```
+
+- **prompt 履歴はデフォルトで残ります**(`session.promptHistory: true`)。セッションが無くても `harness session prompt` は `.harness/prompt_history.jsonl` に記録され、`harness history` で閲覧できます。
+- 保存前にすべてのテキストへ **secret 赤塗り**を適用するため、履歴経由で認証情報が漏れません。
+- `harness integrate claude` を実行すると Claude Code の **UserPromptSubmit hook** が `.claude/settings.json` に設定され、prompt が**自動で**記録されます(hook は常に exit 0 で、ユーザー操作を妨げません)。
+- Codex には prompt hook が無いため、`harness integrate codex` が **AGENTS.md** に運用ルール(prompt 記録・decision 記録・handoff)を追記し、Codex がそれに従います。
 
 ## AI エージェント連携
 

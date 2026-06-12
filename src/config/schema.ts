@@ -60,6 +60,15 @@ export const harnessConfigSchema = z
       })
       .strict()
       .default({}),
+    session: z
+      .object({
+        /** Record prompts to .harness/prompt_history.jsonl. On by default. */
+        promptHistory: z.boolean().default(true),
+        /** How many recent session events to embed in agent context. */
+        contextEvents: z.number().int().positive().max(200).default(20),
+      })
+      .strict()
+      .default({}),
     context: z
       .object({
         /** Extra files always included in agent context (paths relative to root). */

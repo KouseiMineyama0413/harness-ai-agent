@@ -1,0 +1,91 @@
+/**
+ * Agent integration installers.
+ *
+ * `harness integrate claude` — wires a Claude Code UserPromptSubmit hook
+ * into .claude/settings.json so every prompt is recorded automatically,
+ * and appends usage rules to CLAUDE.md.
+ *
+ * `harness integrate codex` — Codex has no prompt hook, so the contract
+ * lives in AGENTS.md (which Codex reads): log prompts/decisions via the
+ * harness CLI and write a handoff before stopping.
+ */
+import path from "node:path";
+import { readIfExists, readJsonIfExists, writeJson, writeText } from "../core/fsutil.js";
+
+const MARKER = "<!-- dev-harness:integration -->";
+const HOOK_COMMAND = "harness session prompt --from-claude-hook";
+
+function agentRules(agent: "claude" | "codex"): string {
+  const lines = [
+    MARKER,
+    "## dev-harness",
+    "",
+    "This repository uses dev-harness for shared agent sessions, prompt history, and guardrails.",
+    "Sessions are shared between Claude and Codex via files under `.harness/` — always:",
+    "",
+    "1. Read `.harness/context.md` before starting (refresh: `harness context`). It includes the active shared session.",
+    `2. If no session is active, run: \`harness session start "<task>" --agent ${agent}\`. If one is active, just keep working — your events join it.`,
+  ];
+  if (agent === "codex") {
+    lines.push(
+      `3. Record each user prompt you receive: \`harness session prompt "<text>" --agent codex\` (history: \`.harness/prompt_history.jsonl\`).`,
+    );
+  } else {
+    lines.push(
+      "3. Prompts are recorded automatically via the UserPromptSubmit hook (history: `.harness/prompt_history.jsonl`).",
+    );
+  }
+  lines.push(
+    `4. Log key design decisions: \`harness session decision "<text>" --agent ${agent}\`.`,
+    `5. Check risky commands first: \`harness guard check-command "<cmd>"\`. Run \`harness gate run\` after changes.`,
+    `6. Before stopping: \`harness session handoff --agent ${agent}\` so the other agent can continue.`,
+    "",
+  );
+  return lines.join("\n");
+}
+
+function appendRulesIfMissing(file: string, agent: "claude" | "codex"): boolean {
+  const existing = readIfExists(file);
+  if (existing?.includes(MARKER)) return false;
+  const content = existing ? existing.trimEnd() + "\n\n" + agentRules(agent) : agentRules(agent);
+  writeText(file, content);
+  return true;
+}
+
+interface ClaudeSettings {
+  hooks?: Record<string, { matcher?: string; hooks: { type: string; command: string }[] }[]>;
+  [key: string]: unknown;
+}
+
+export function integrateClaude(root: string): string[] {
+  const changes: string[] = [];
+
+  const settingsPath = path.join(root, ".claude", "settings.json");
+  const settings = readJsonIfExists<ClaudeSettings>(settingsPath) ?? {};
+  const hooks = (settings.hooks ??= {});
+  const entries = (hooks["UserPromptSubmit"] ??= []);
+  const installed = entries.some((e) => e.hooks?.some((h) => h.command === HOOK_COMMAND));
+  if (!installed) {
+    entries.push({ hooks: [{ type: "command", command: HOOK_COMMAND }] });
+    writeJson(settingsPath, settings);
+    changes.push(`.claude/settings.json: added UserPromptSubmit hook (auto prompt history)`);
+  }
+
+  if (appendRulesIfMissing(path.join(root, "CLAUDE.md"), "claude")) {
+    changes.push("CLAUDE.md: added dev-harness session rules");
+  }
+  return changes;
+}
+
+export function integrateCodex(root: string): string[] {
+  const changes: string[] = [];
+  if (appendRulesIfMissing(path.join(root, "AGENTS.md"), "codex")) {
+    changes.push("AGENTS.md: added dev-harness session rules (Codex reads AGENTS.md)");
+  }
+  return changes;
+}
+
+export function isClaudeHookInstalled(root: string): boolean {
+  const settings = readJsonIfExists<ClaudeSettings>(path.join(root, ".claude", "settings.json"));
+  return JSON.stringify(settings ?? {}).includes(HOOK_COMMAND);
+}

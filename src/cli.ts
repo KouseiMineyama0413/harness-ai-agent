@@ -18,7 +18,19 @@ import { Logger } from "./core/logger.js";
 import { gatesPassed, runGates } from "./gates/runner.js";
 import { checkCommand } from "./guardrails/commandPolicy.js";
 import { checkDiff, isGitRepo } from "./guardrails/diffBudget.js";
+import { integrateClaude, integrateCodex } from "./integrations/install.js";
 import { buildGateReport, listReports, renderMarkdown, writeReport } from "./report/reporter.js";
+import {
+  appendEvent,
+  endSession,
+  getActiveSession,
+  listSessions,
+  loadEvents,
+  loadSession,
+  readPromptHistory,
+  startSession,
+  writeHandoff,
+} from "./session/store.js";
 import {
   createRequirement,
   lintRequirement,
@@ -84,6 +96,7 @@ program
     if (!fileExists(gitignore)) writeText(gitignore, "logs/\n");
     logger.info("initialized .harness/ (commit reports/requirements, logs are git-ignored)");
     logger.info("next: harness analyze && harness context");
+    logger.info("agent setup: harness integrate claude / harness integrate codex");
   });
 
 // ---------------------------------------------------------------- analyze
@@ -244,6 +257,188 @@ req
     }
   });
 
+// ---------------------------------------------------------------- session
+const session = program.command("session").description("shared agent sessions (Claude/Codex) and prompt history");
+
+session
+  .command("start <title>")
+  .description("start a new shared session")
+  .option("--agent <name>", "agent recording the event (claude|codex|human|...)", "human")
+  .action((title: string, opts: { agent: string }) => {
+    const { root, logger } = ctx();
+    try {
+      const s = startSession(root, title, opts.agent);
+      logger.info(`session ${s.id} started`);
+      process.stdout.write(`${s.id} "${s.title}" active. Other agents join automatically.\n`);
+    } catch (err) {
+      logger.error((err as Error).message);
+      process.exit(EXIT_CHECK_FAILED);
+    }
+  });
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+session
+  .command("prompt [text]")
+  .description("record a prompt (kept in .harness/prompt_history.jsonl by default)")
+  .option("--agent <name>", "agent name", "human")
+  .option("--stdin", "read prompt text from stdin")
+  .option("--from-claude-hook", "parse Claude Code UserPromptSubmit hook JSON from stdin (always exits 0)")
+  .action(async (text: string | undefined, opts: { agent: string; stdin?: boolean; fromClaudeHook?: boolean }) => {
+    if (opts.fromClaudeHook) {
+      // Hook mode must never fail the user's prompt and must not write to
+      // stdout (UserPromptSubmit stdout becomes extra prompt context).
+      try {
+        const root = path.resolve(program.opts<{ cwd: string }>().cwd);
+        const raw = await readStdin();
+        const prompt = (JSON.parse(raw) as { prompt?: unknown }).prompt;
+        if (typeof prompt === "string" && prompt.trim()) {
+          const { config } = loadConfig(root);
+          if (config.session.promptHistory) {
+            appendEvent(root, "prompt", prompt, "claude");
+          }
+        }
+      } catch {
+        // swallow everything in hook mode
+      }
+      process.exit(EXIT_OK);
+    }
+
+    const { root, config, logger } = ctx();
+    const body = opts.stdin ? await readStdin() : text;
+    if (!body?.trim()) {
+      logger.error("prompt text required (argument or --stdin)");
+      process.exit(EXIT_USAGE);
+    }
+    const result = appendEvent(root, "prompt", body, opts.agent, {
+      promptHistory: config.session.promptHistory,
+    });
+    logger.info(
+      result.sessionId
+        ? `recorded in session ${result.sessionId} and prompt history`
+        : "no active session — recorded in prompt history only",
+    );
+  });
+
+for (const kind of ["note", "decision"] as const) {
+  session
+    .command(`${kind} <text>`)
+    .description(`record a ${kind} in the active session`)
+    .option("--agent <name>", "agent name", "human")
+    .action((text: string, opts: { agent: string }) => {
+      const { root, logger } = ctx();
+      const result = appendEvent(root, kind, text, opts.agent);
+      if (!result.sessionId) {
+        logger.error("no active session — run `harness session start` first");
+        process.exit(EXIT_CHECK_FAILED);
+      }
+      logger.info(`${kind} recorded in ${result.sessionId}`);
+    });
+}
+
+session
+  .command("handoff")
+  .description("write a handoff document so the next agent (Claude/Codex) can continue")
+  .option("--agent <name>", "agent name", "human")
+  .action((opts: { agent: string }) => {
+    const { root, config, logger } = ctx();
+    try {
+      const latest = listReports(root, config).filter((f) => f.endsWith(".md")).pop();
+      const file = writeHandoff(root, opts.agent, latest);
+      logger.info(`handoff written`);
+      process.stdout.write(path.relative(root, file) + "\n");
+    } catch (err) {
+      logger.error((err as Error).message);
+      process.exit(EXIT_CHECK_FAILED);
+    }
+  });
+
+session
+  .command("end")
+  .description("close the active session")
+  .option("--agent <name>", "agent name", "human")
+  .action((opts: { agent: string }) => {
+    const { root, logger } = ctx();
+    try {
+      const s = endSession(root, opts.agent);
+      process.stdout.write(`${s.id} closed (agents: ${s.agents.join(", ")})\n`);
+    } catch (err) {
+      logger.error((err as Error).message);
+      process.exit(EXIT_CHECK_FAILED);
+    }
+  });
+
+session
+  .command("list")
+  .description("list sessions")
+  .action(() => {
+    const { root } = ctx();
+    for (const s of listSessions(root)) {
+      process.stdout.write(`${s.id}  [${s.status}]  ${s.title}  (agents: ${s.agents.join(", ")})\n`);
+    }
+  });
+
+session
+  .command("show [id]")
+  .description("show a session and its events (defaults to the active session)")
+  .option("--json", "print JSON")
+  .action((id: string | undefined, opts: { json?: boolean }) => {
+    const { root, logger } = ctx();
+    const s = id ? loadSession(root, id) : getActiveSession(root);
+    if (!s) {
+      logger.error(id ? `session not found: ${id}` : "no active session");
+      process.exit(EXIT_USAGE);
+    }
+    const events = loadEvents(root, s.id);
+    if (opts.json) {
+      process.stdout.write(JSON.stringify({ ...s, events }, null, 2) + "\n");
+      return;
+    }
+    process.stdout.write(`${s.id} "${s.title}" [${s.status}] agents: ${s.agents.join(", ")}\n`);
+    for (const e of events) {
+      process.stdout.write(`  [${e.ts}] ${e.agent} ${e.kind}: ${e.text}\n`);
+    }
+  });
+
+// ---------------------------------------------------------------- history
+program
+  .command("history")
+  .description("show prompt history (.harness/prompt_history.jsonl)")
+  .option("--limit <n>", "max entries", "50")
+  .option("--json", "print JSON")
+  .action((opts: { limit: string; json?: boolean }) => {
+    const { root } = ctx();
+    const entries = readPromptHistory(root, Number.parseInt(opts.limit, 10) || 50);
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(entries, null, 2) + "\n");
+      return;
+    }
+    for (const e of entries) {
+      process.stdout.write(`[${e.ts}] ${e.agent}${e.sessionId ? ` (${e.sessionId})` : ""}: ${e.text}\n`);
+    }
+  });
+
+// ---------------------------------------------------------------- integrate
+program
+  .command("integrate <agent>")
+  .description("install agent integration: claude (prompt hook + CLAUDE.md) or codex (AGENTS.md)")
+  .action((agent: string) => {
+    const { root, logger } = ctx();
+    let changes: string[];
+    if (agent === "claude") changes = integrateClaude(root);
+    else if (agent === "codex") changes = integrateCodex(root);
+    else {
+      logger.error(`unknown agent "${agent}" — supported: claude, codex`);
+      process.exit(EXIT_USAGE);
+    }
+    if (changes.length === 0) process.stdout.write("already integrated — nothing to do\n");
+    for (const c of changes) process.stdout.write(`+ ${c}\n`);
+  });
+
 // ---------------------------------------------------------------- report
 const reportCmd = program.command("report").description("run reports");
 reportCmd
@@ -288,6 +483,10 @@ gates: {}
 #    command: npx vitest run --coverage
 #    threshold: 80
 #    required: false
+
+session:
+  promptHistory: true  # record prompts to .harness/prompt_history.jsonl (default on)
+  contextEvents: 20    # recent session events embedded in agent context
 
 context:
   includeFiles: []

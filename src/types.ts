@@ -103,6 +103,13 @@ export interface AgentContext {
     branch?: string;
     dirtyFiles?: number;
   };
+  /** Active shared session, so any agent can pick up where another left off. */
+  session?: {
+    id: string;
+    title: string;
+    agents: string[];
+    recentEvents: SessionEvent[];
+  };
 }
 
 /** Outcome of checking a shell command against the safety policy. */
@@ -124,6 +131,35 @@ export interface DiffCheckResult {
   protectedTouched: string[];
   /** Files in which potential secrets were introduced. */
   secretFindings: { file: string; line: number; kind: string }[];
+}
+
+/** Kinds of events recorded in a shared agent session. */
+export type SessionEventKind = "prompt" | "note" | "decision" | "handoff" | "status";
+
+export interface SessionEvent {
+  ts: string;
+  /** Who produced the event: "claude", "codex", "human", ... */
+  agent: string;
+  kind: SessionEventKind;
+  /** Secret-redacted text. */
+  text: string;
+}
+
+/** A work session shared between agents (Claude, Codex, humans). */
+export interface Session {
+  schemaVersion: 1;
+  id: string;
+  title: string;
+  status: "active" | "closed";
+  startedAt: string;
+  endedAt?: string;
+  /** Agents that have recorded at least one event. */
+  agents: string[];
+}
+
+/** One line of .harness/prompt_history.jsonl */
+export interface PromptHistoryEntry extends SessionEvent {
+  sessionId: string | null;
 }
 
 /** A structured feature requirement document. */
