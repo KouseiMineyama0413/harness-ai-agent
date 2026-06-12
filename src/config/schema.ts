@@ -5,6 +5,11 @@ import { ALL_GATE_IDS, type GateId } from "../types.js";
 const gateConfigSchema = z
   .object({
     command: z.string().min(1).nullable().optional(),
+    /**
+     * Command template used by `gate run --changed`. Placeholders:
+     * {files} = changed files, {dirs} = unique directories of changed files.
+     */
+    changedCommand: z.string().min(1).optional(),
     required: z.boolean().default(true),
     timeoutSec: z.number().int().positive().max(3600).default(600),
   })
@@ -31,6 +36,12 @@ export const harnessConfigSchema = z
     agent: z
       .object({
         requirePlan: z.boolean().default(true),
+        /**
+         * Hard enforcement of requirePlan: `guard scan-diff` fails unless an
+         * approved plan exists in .harness/plans/. Off by default so adopting
+         * the harness never blocks an existing workflow.
+         */
+        enforcePlan: z.boolean().default(false),
         changeBudget: z
           .object({
             maxFiles: z.number().int().positive().default(20),
@@ -57,6 +68,17 @@ export const harnessConfigSchema = z
         security: gateConfigSchema.optional(),
         deps: gateConfigSchema.optional(),
         coverage: coverageGateSchema.optional(),
+        /** Breaking-change detection (config-only; e.g. oasdiff, api-extractor). */
+        breaking: gateConfigSchema.optional(),
+      })
+      .strict()
+      .default({}),
+    llm: z
+      .object({
+        provider: z.enum(["anthropic"]).default("anthropic"),
+        model: z.string().optional(),
+        apiKeyEnv: z.string().default("ANTHROPIC_API_KEY"),
+        maxTokens: z.number().int().positive().max(64000).default(2048),
       })
       .strict()
       .default({}),

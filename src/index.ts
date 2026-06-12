@@ -7,7 +7,7 @@ export * from "./types.js";
 export { harnessConfigSchema, defaultConfig, type HarnessConfig } from "./config/schema.js";
 export { loadConfig, ConfigError, CONFIG_FILENAME } from "./config/load.js";
 export { analyzeProject, loadProfile, PROFILE_PATH } from "./analyze/analyzer.js";
-export { runGates, resolveGates, gatesPassed, parseCoverage } from "./gates/runner.js";
+export { runGates, resolveGates, gatesPassed, parseCoverage, substituteChanged } from "./gates/runner.js";
 export { generateContext, renderContextMarkdown } from "./context/generator.js";
 export { buildGateReport, writeReport, renderMarkdown, listReports } from "./report/reporter.js";
 export { checkCommand } from "./guardrails/commandPolicy.js";
@@ -34,6 +34,21 @@ export {
 } from "./session/store.js";
 export { integrateClaude, integrateCodex, isClaudeHookInstalled } from "./integrations/install.js";
 export { HarnessDb, DB_PATH } from "./db/database.js";
+export {
+  addClaim,
+  releaseClaim,
+  releaseAgentClaims,
+  listClaims,
+  findClaimConflicts,
+  CLAIMS_PATH,
+} from "./guardrails/claims.js";
+export { createPlan, setPlanStatus, listPlans, loadPlan, hasApprovedPlan, PLANS_DIR } from "./plans/plans.js";
+export { buildPrSummary } from "./report/prSummary.js";
+export { runDoctor, type DoctorCheck } from "./doctor/doctor.js";
+export { summarizeSession } from "./session/summarize.js";
+export { getProvider, registerProvider, type LlmProvider } from "./llm/provider.js";
+export { startMcpServer } from "./mcp/server.js";
+export { integrateGitHooks } from "./integrations/install.js";
 export { registerAdapter, getAdapters } from "./adapters/registry.js";
 export type { StackAdapter, AdapterDetection } from "./adapters/types.js";
 export { Logger } from "./core/logger.js";

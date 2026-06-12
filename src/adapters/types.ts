@@ -5,6 +5,11 @@ export interface AdapterDetection {
   technologies: DetectedTechnology[];
   /** Gate commands this adapter can infer (config overrides win). */
   commands: Partial<Record<GateId, string>>;
+  /**
+   * Changed-files command templates for `gate run --changed`.
+   * Placeholders: {files} = changed files, {dirs} = their unique directories.
+   */
+  changedCommands?: Partial<Record<GateId, string>>;
   /** Files worth surfacing to humans/agents (entry points, configs). */
   notableFiles: string[];
 }

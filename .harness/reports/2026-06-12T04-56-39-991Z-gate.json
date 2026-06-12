@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "kind": "gate",
+  "generatedAt": "2026-06-12T04:56:39.991Z",
+  "project": "dev-harness",
+  "summary": "Required gates failing: build.",
+  "passed": false,
+  "gates": [
+    {
+      "id": "test",
+      "status": "passed",
+      "command": "npx vitest run",
+      "exitCode": 0,
+      "durationMs": 746,
+      "output": "\n\u001b[1m\u001b[7m\u001b[36m RUN \u001b[39m\u001b[27m\u001b[22m \u001b[36mv2.1.9 \u001b[39m\u001b[90m/Users/kosei-mineyama/src/environment/peakcode/base-harness\u001b[39m\n\n \u001b[32m✓\u001b[39m src/guardrails/commandPolicy.test.ts \u001b[2m(\u001b[22m\u001b[2m7 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 3\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/guardrails/secrets.test.ts \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 3\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/requirements/requirements.test.ts \u001b[2m(\u001b[22m\u001b[2m4 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 3\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/plans/plans.test.ts \u001b[2m(\u001b[22m\u001b[2m2 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 5\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/guardrails/claims.test.ts \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 10\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/session/store.test.ts \u001b[2m(\u001b[22m\u001b[2m7 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 16\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/gates/runner.test.ts \u001b[2m(\u001b[22m\u001b[2m8 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 11\u001b[2mms\u001b[22m\u001b[39m\n(node:24632) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n \u001b[32m✓\u001b[39m src/db/database.test.ts \u001b[2m(\u001b[22m\u001b[2m7 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 88\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m8 passed\u001b[39m\u001b[22m\u001b[90m (8)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m45 passed\u001b[39m\u001b[22m\u001b[90m (45)\u001b[39m\n\u001b[2m   Start at \u001b[22m 13:56:38\n\u001b[2m   Duration \u001b[22m 370ms\u001b[2m (transform 334ms, setup 0ms, collect 502ms, tests 138ms, environment 1ms, prepare 528ms)\u001b[22m\n\n",
+      "required": true
+    },
+    {
+      "id": "build",
+      "status": "failed",
+      "command": "npm run build",
+      "exitCode": 2,
+      "durationMs": 1067,
+      "output": "\n> @peakcode/dev-harness@0.1.0 build\n> tsc -p tsconfig.json\n\nsrc/cli.ts(848,35): error TS1005: ';' expected.\nsrc/cli.ts(848,43): error TS1434: Unexpected keyword or identifier.\n",
+      "reason": "exit code 2",
+      "required": true
+    }
+  ],
+  "unresolvedRisks": [],
+  "nextSteps": [
+    "fix required gate build (exit code 2) and re-run `harness gate run --only build`"
+  ]
+}

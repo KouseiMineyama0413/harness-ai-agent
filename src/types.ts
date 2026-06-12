@@ -28,7 +28,8 @@ export type GateId =
   | "build"
   | "security"
   | "deps"
-  | "coverage";
+  | "coverage"
+  | "breaking";
 
 export const ALL_GATE_IDS: GateId[] = [
   "lint",
@@ -38,6 +39,7 @@ export const ALL_GATE_IDS: GateId[] = [
   "security",
   "deps",
   "coverage",
+  "breaking",
 ];
 
 /** A concrete, runnable command for a gate, with provenance. */
@@ -73,6 +75,8 @@ export interface ProjectProfile {
   technologies: DetectedTechnology[];
   /** Commands the harness inferred (before config overrides). */
   inferredCommands: Partial<Record<GateId, string>>;
+  /** Changed-files command templates ({files}/{dirs} placeholders) for `gate run --changed`. */
+  inferredChangedCommands?: Partial<Record<GateId, string>>;
   /** Top-level layout summary: dir -> short description. */
   layout: Record<string, string>;
   /** Entry points / notable files. */
@@ -131,10 +135,14 @@ export interface DiffCheckResult {
   protectedTouched: string[];
   /** Files in which potential secrets were introduced. */
   secretFindings: { file: string; line: number; kind: string }[];
+  /** Changed files claimed by a different agent. */
+  claimConflicts: { file: string; claimedBy: string; path: string }[];
+  /** True when agent.enforcePlan is on and no approved plan exists. */
+  planMissing: boolean;
 }
 
 /** Kinds of events recorded in a shared agent session. */
-export type SessionEventKind = "prompt" | "note" | "decision" | "handoff" | "status";
+export type SessionEventKind = "prompt" | "note" | "decision" | "handoff" | "status" | "cost";
 
 export interface SessionEvent {
   ts: string;
@@ -143,6 +151,35 @@ export interface SessionEvent {
   kind: SessionEventKind;
   /** Secret-redacted text. */
   text: string;
+  /** Structured numbers, e.g. { usd, tokensIn, tokensOut } on "cost" events. */
+  data?: Record<string, number>;
+}
+
+/** An exclusive work claim on a path, preventing concurrent-agent conflicts. */
+export interface Claim {
+  /** Normalized repo-relative path (file or directory). */
+  path: string;
+  agent: string;
+  sessionId: string | null;
+  claimedAt: string;
+  reason?: string;
+}
+
+export type PlanStatus = "draft" | "approved" | "completed" | "rejected";
+
+/** An implementation plan that humans approve before agents change code. */
+export interface Plan {
+  schemaVersion: 1;
+  id: string;
+  title: string;
+  status: PlanStatus;
+  createdAt: string;
+  /** Linked requirement id (REQ-xxx), if any. */
+  requirement?: string;
+  steps: string[];
+  approvedAt?: string;
+  approvedBy?: string;
+  completedAt?: string;
 }
 
 /** Per-agent activity summary computed from the SQLite index. */
@@ -152,6 +189,9 @@ export interface AgentActivity {
   prompts: number;
   decisions: number;
   notes: number;
+  /** Accumulated cost from "cost" events. */
+  costUsd: number;
+  tokens: number;
   lastActive: string | null;
 }
 

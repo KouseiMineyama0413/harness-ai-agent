@@ -16,7 +16,7 @@
 
 ```bash
 # 既存リポジトリで(リポジトリ自体には依存を追加しない)
-npm install -g @peakcode/dev-harness   # または npx で都度実行
+pnpm add -g @peakcode/dev-harness   # または pnpm dlx で都度実行
 cd your-project
 harness init        # harness.yaml と .harness/ を生成
 harness analyze     # スタック検出 → .harness/project_profile.json
@@ -42,9 +42,18 @@ harness gate run    # 品質ゲート実行 → .harness/reports/
 | `harness session list / show / end` | セッション管理 |
 | `harness history [--limit 50] [--search <q> [--agent X]]` | prompt 履歴の閲覧・検索(SQLite) |
 | `harness team list` | 観測されたエージェント一覧 |
-| `harness team activity [--agent X]` | エージェント別アクティビティ集計(SQLite) |
+| `harness team activity [--agent X]` | エージェント別アクティビティ集計(コスト含む・SQLite) |
 | `harness team sessions <agent>` | エージェントが参加したセッション一覧 |
 | `harness reindex` | SQLite インデックスをファイルから再構築 |
+| `harness claim add/release/release-all/list` | パスの排他 claim(並行エージェントの衝突防止) |
+| `harness plan new/approve/reject/complete/list/show` | 実装計画の作成と人間による承認 |
+| `harness session cost --usd 0.42 --tokens-in N` | セッションへのコスト記録 |
+| `harness session summarize [id]` | LLM でセッションを要約し、教訓を project profile に蓄積 |
+| `harness gate run --changed [base]` | 変更ファイルに関連するテスト/lint のみ実行 |
+| `harness pr-summary [--base ref] [--out f]` | セッションの decision・diff・gate 結果から PR 説明文を生成 |
+| `harness doctor` | 環境診断(node / sqlite / git / 設定 / 統合) |
+| `harness integrate git-hooks` | pre-commit(scan-diff)/ pre-push(gate run)を設置 |
+| `harness mcp` | MCP サーバーとして起動(エージェントがネイティブツールとして利用) |
 | `harness integrate claude\|codex` | エージェント統合のインストール(hook / AGENTS.md) |
 | `harness report list` | 生成済みレポート一覧 |
 
@@ -118,6 +127,35 @@ $ harness history --search "CSV" --agent claude
 
 SQLite は Node.js 組み込みの `node:sqlite` を使うため、`better-sqlite3` のようなネイティブビルドは不要です。
 
+## 並行エージェントの衝突防止(claim)
+
+```bash
+harness claim add src/billing --agent claude --reason "請求リファクタ中"
+# 別エージェントが重なる claim を取ろうとすると即エラー。
+# さらに guard scan-diff が「他エージェントの claim 下のファイルへの変更」を violation にする
+harness guard scan-diff --agent codex   # → VIOLATIONS: claimed by claude
+```
+
+claim は `.harness/claims.json`(コミット対象)に保存。`harness doctor` が 24h 超の放置 claim を警告します。
+
+## 計画の強制(plan)
+
+`harness plan new` でエージェントが計画を作成 → 人間が `harness plan approve PLAN-001 --by <name>` で承認。`agent.enforcePlan: true` にすると、**承認済み plan が無い限り `guard scan-diff` が fail** します(デフォルト off なので既存導入を壊しません)。状態遷移は draft → approved → completed / rejected。
+
+## MCP サーバー
+
+`harness mcp` で stdio の MCP サーバーとして起動します。Claude Code への登録例:
+
+```bash
+claude mcp add harness -- harness mcp
+```
+
+公開ツール: `get_context` / `run_gates` / `check_command` / `scan_diff` / `record_event` / `search_history` / `team_activity` / `claim_paths` / `write_handoff`。エージェントはシェル経由ではなくネイティブのツール呼び出しで harness を使えます。
+
+## セッション要約(LLM)
+
+`harness session summarize` がセッションのイベントログを Anthropic API(公式 SDK、デフォルト `claude-opus-4-8`)で要約し、`<id>.summary.md` に保存、教訓を `project_profile.json` の notes に追記します(→ 次回以降の `harness context` に自動掲載)。`ANTHROPIC_API_KEY` が必要。プロバイダは `LlmProvider` インターフェースで差し替え可能です。
+
 ## AI エージェント連携
 
 エージェントには `.harness/context.md` をプロンプト先頭に渡してください。技術スタック、レイアウト、実行コマンド、そして**遵守必須のガードレール**(変更予算、保護パス、計画必須、secret 禁止)が含まれます。
@@ -185,8 +223,10 @@ templates/               # CI テンプレート
 ## 開発
 
 ```bash
-npm install
-npm test          # vitest
-npm run build     # tsc → dist/
-npm run dev -- analyze   # ソースから直接実行
+pnpm install
+pnpm test          # vitest
+pnpm run build     # tsc → dist/
+pnpm run dev -- analyze   # ソースから直接実行
 ```
+
+Node のバージョンは `mise.toml` で 22 系に固定されています(`mise install` で揃います)。

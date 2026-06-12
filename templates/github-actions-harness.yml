@@ -19,19 +19,21 @@ jobs:
         with:
           fetch-depth: 0 # needed for guard scan-diff --base
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22 # harness requires >= 22.5 (built-in node:sqlite)
-          cache: npm
+          cache: pnpm
 
       # Install the target project's own toolchain first (adjust per repo).
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Install harness
-        run: npm install -g @peakcode/dev-harness
+        run: pnpm add -g @peakcode/dev-harness
         # During development, replace with:
-        # run: npm install -g github:peakcode/dev-harness
+        # run: pnpm add -g github:Peakcode-Co-Ltd/dev-harness
 
       - name: Analyze project
         run: harness analyze

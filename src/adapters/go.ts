@@ -33,10 +33,15 @@ export const goAdapter: StackAdapter = {
       security: "govulncheck ./...",
     };
 
+    const changedCommands: Partial<Record<GateId, string>> = {
+      test: "go test {dirs}",
+      lint: "go vet {dirs}",
+    };
+
     const notableFiles = ["go.mod", "main.go", "Makefile"].filter((f) =>
       fileExists(path.join(root, f)),
     );
 
-    return { technologies, commands, notableFiles };
+    return { technologies, commands, changedCommands, notableFiles };
   },
 };

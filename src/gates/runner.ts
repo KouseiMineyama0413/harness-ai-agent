@@ -14,12 +14,37 @@ import { execCommand } from "../core/exec.js";
 import type { Logger } from "../core/logger.js";
 import { ALL_GATE_IDS, type GateId, type GateResult, type ProjectProfile, type ResolvedGate } from "../types.js";
 
+/** Shell-quote a file path for interpolation into a gate command. */
+function quote(p: string): string {
+  return `'${p.replaceAll("'", `'\\''`)}'`;
+}
+
+/** Fill {files} / {dirs} placeholders in a changed-command template. */
+export function substituteChanged(template: string, files: string[]): string {
+  const dirs = [...new Set(files.map((f) => {
+    const dir = f.includes("/") ? f.slice(0, f.lastIndexOf("/")) : ".";
+    return "./" + dir;
+  }))];
+  return template
+    .replaceAll("{files}", files.map(quote).join(" "))
+    .replaceAll("{dirs}", dirs.map(quote).join(" "));
+}
+
+export interface ResolveOptions {
+  only?: GateId[];
+  /**
+   * When set, gates with a changedCommand template (config or adapter) run
+   * scoped to these files; gates without one run their full command.
+   */
+  changedFiles?: string[];
+}
+
 export function resolveGates(
   config: HarnessConfig,
   profile: ProjectProfile,
-  only?: GateId[],
+  opts: ResolveOptions = {},
 ): { resolved: ResolvedGate[]; skipped: GateResult[] } {
-  const ids = only && only.length > 0 ? only : ALL_GATE_IDS;
+  const ids = opts.only && opts.only.length > 0 ? opts.only : ALL_GATE_IDS;
   const resolved: ResolvedGate[] = [];
   const skipped: GateResult[] = [];
 
@@ -30,7 +55,21 @@ export function resolveGates(
       skipped.push(skip(id, "disabled in harness.yaml"));
       continue;
     }
-    const command = gateCfg?.command ?? profile.inferredCommands[id];
+    let command = gateCfg?.command ?? profile.inferredCommands[id];
+    let source: ResolvedGate["source"] = gateCfg?.command ? "config" : "adapter";
+
+    if (opts.changedFiles) {
+      if (opts.changedFiles.length === 0) {
+        skipped.push(skip(id, "no changed files"));
+        continue;
+      }
+      const template = gateCfg?.changedCommand ?? profile.inferredChangedCommands?.[id];
+      if (template) {
+        command = substituteChanged(template, opts.changedFiles);
+        source = gateCfg?.changedCommand ? "config" : "adapter";
+      }
+    }
+
     if (!command) {
       skipped.push(skip(id, "no command configured or inferred"));
       continue;
@@ -38,7 +77,7 @@ export function resolveGates(
     resolved.push({
       id,
       command,
-      source: gateCfg?.command ? "config" : "adapter",
+      source,
       required: gateCfg?.required ?? defaultRequired(id),
       timeoutSec: gateCfg?.timeoutSec ?? 600,
     });
@@ -60,9 +99,9 @@ export async function runGates(
   config: HarnessConfig,
   profile: ProjectProfile,
   logger: Logger,
-  only?: GateId[],
+  opts: ResolveOptions = {},
 ): Promise<GateResult[]> {
-  const { resolved, skipped } = resolveGates(config, profile, only);
+  const { resolved, skipped } = resolveGates(config, profile, opts);
   const results: GateResult[] = [...skipped];
 
   for (const gate of resolved) {

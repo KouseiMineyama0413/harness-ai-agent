@@ -4,7 +4,9 @@
  */
 import { execFileSync } from "node:child_process";
 import type { HarnessConfig } from "../config/schema.js";
+import { hasApprovedPlan } from "../plans/plans.js";
 import type { DiffCheckResult } from "../types.js";
+import { findClaimConflicts, listClaims } from "./claims.js";
 import { findSecrets } from "./secrets.js";
 
 function git(root: string, args: string[]): string {
@@ -35,13 +37,25 @@ export function matchesProtected(file: string, patterns: string[]): boolean {
   return false;
 }
 
+export interface CheckDiffOptions {
+  /** Compare against a base ref (CI on PRs) instead of the working tree. */
+  baseRef?: string;
+  /** Agent performing the change; used for claim conflict checks. */
+  agent?: string;
+}
+
 /**
  * Check the current uncommitted diff (staged + unstaged) against the
- * configured change budget. `baseRef` switches to comparing against a
- * branch instead, which is what CI uses on pull requests.
+ * configured change budget, protected paths, other agents' claims, plan
+ * enforcement and secret introduction.
  */
-export function checkDiff(root: string, config: HarnessConfig, baseRef?: string): DiffCheckResult {
-  const range = baseRef ? [`${baseRef}...HEAD`] : ["HEAD"];
+export function checkDiff(
+  root: string,
+  config: HarnessConfig,
+  opts: CheckDiffOptions = {},
+): DiffCheckResult {
+  const range = opts.baseRef ? [`${opts.baseRef}...HEAD`] : ["HEAD"];
+  const agent = opts.agent ?? "human";
 
   const numstat = git(root, ["diff", "--numstat", ...range]).trim();
   const nameOnly = git(root, ["diff", "--name-only", ...range]).trim();
@@ -71,6 +85,22 @@ export function checkDiff(root: string, config: HarnessConfig, baseRef?: string)
   const protectedTouched = files.filter((f) => matchesProtected(f, config.agent.protectedPaths));
   if (protectedTouched.length > 0) {
     violations.push(`protected paths touched: ${protectedTouched.join(", ")}`);
+  }
+
+  const claimConflicts = findClaimConflicts(files, agent, listClaims(root));
+  if (claimConflicts.length > 0) {
+    violations.push(
+      `files claimed by another agent: ${claimConflicts
+        .map((c) => `${c.file} (claimed by ${c.claimedBy} via ${c.path})`)
+        .join(", ")}`,
+    );
+  }
+
+  const planMissing = config.agent.enforcePlan && files.length > 0 && !hasApprovedPlan(root);
+  if (planMissing) {
+    violations.push(
+      "no approved plan — agent.enforcePlan is on; create one with `harness plan new` and have a human run `harness plan approve`",
+    );
   }
 
   // Scan only added lines for secrets.
@@ -106,5 +136,7 @@ export function checkDiff(root: string, config: HarnessConfig, baseRef?: string)
     violations,
     protectedTouched,
     secretFindings,
+    claimConflicts,
+    planMissing,
   };
 }

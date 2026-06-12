@@ -9,6 +9,7 @@
  * lives in AGENTS.md (which Codex reads): log prompts/decisions via the
  * harness CLI and write a handoff before stopping.
  */
+import fs from "node:fs";
 import path from "node:path";
 import { readIfExists, readJsonIfExists, writeJson, writeText } from "../core/fsutil.js";
 
@@ -88,4 +89,49 @@ export function integrateCodex(root: string): string[] {
 export function isClaudeHookInstalled(root: string): boolean {
   const settings = readJsonIfExists<ClaudeSettings>(path.join(root, ".claude", "settings.json"));
   return JSON.stringify(settings ?? {}).includes(HOOK_COMMAND);
+}
+
+const GIT_HOOK_MARKER = "# dev-harness hook";
+
+const GIT_HOOKS: Record<string, string> = {
+  "pre-commit": `#!/bin/sh
+${GIT_HOOK_MARKER}
+# Block commits that violate the change budget, protected paths,
+# other agents' claims, or introduce secrets.
+harness guard scan-diff || {
+  echo "dev-harness: guard scan-diff failed — fix violations or adjust harness.yaml" >&2
+  exit 1
+}
+`,
+  "pre-push": `#!/bin/sh
+${GIT_HOOK_MARKER}
+# Run quality gates before anything leaves the machine.
+harness gate run || {
+  echo "dev-harness: quality gates failed — see .harness/reports/" >&2
+  exit 1
+}
+`,
+};
+
+/** Install pre-commit / pre-push hooks into .git/hooks (backing up foreign ones). */
+export function integrateGitHooks(root: string): string[] {
+  const hooksDir = path.join(root, ".git", "hooks");
+  if (!fs.existsSync(path.join(root, ".git"))) {
+    throw new Error("not a git repository — run `git init` first");
+  }
+  fs.mkdirSync(hooksDir, { recursive: true });
+
+  const changes: string[] = [];
+  for (const [name, content] of Object.entries(GIT_HOOKS)) {
+    const file = path.join(hooksDir, name);
+    const existing = readIfExists(file);
+    if (existing?.includes(GIT_HOOK_MARKER)) continue; // already ours
+    if (existing) {
+      fs.copyFileSync(file, file + ".bak");
+      changes.push(`.git/hooks/${name}: existing hook backed up to ${name}.bak`);
+    }
+    fs.writeFileSync(file, content, { mode: 0o755 });
+    changes.push(`.git/hooks/${name}: installed`);
+  }
+  return changes;
 }

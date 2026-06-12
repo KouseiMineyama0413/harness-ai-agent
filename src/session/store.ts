@@ -94,13 +94,14 @@ export function appendEvent(
   kind: SessionEventKind,
   text: string,
   agent: string,
-  opts: { promptHistory?: boolean } = {},
+  opts: { promptHistory?: boolean; data?: Record<string, number> } = {},
 ): AppendResult {
   const event: SessionEvent = {
     ts: new Date().toISOString(),
     agent,
     kind,
     text: redactSecrets(text.trim()),
+    ...(opts.data && Object.keys(opts.data).length > 0 ? { data: opts.data } : {}),
   };
 
   const session = getActiveSession(root);

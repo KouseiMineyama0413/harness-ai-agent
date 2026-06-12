@@ -39,6 +39,7 @@ const DIR_HINTS: Record<string, string> = {
 export function analyzeProject(root: string, config: HarnessConfig, logger: Logger): ProjectProfile {
   const technologies: DetectedTechnology[] = [];
   const inferredCommands: Partial<Record<GateId, string>> = {};
+  const inferredChangedCommands: Partial<Record<GateId, string>> = {};
   const notableFiles = new Set<string>();
 
   for (const adapter of getAdapters()) {
@@ -51,6 +52,11 @@ export function analyzeProject(root: string, config: HarnessConfig, logger: Logg
         // First adapter to claim a gate wins (registry order is priority).
         if (cmd && !inferredCommands[gate as GateId]) {
           inferredCommands[gate as GateId] = cmd;
+        }
+      }
+      for (const [gate, cmd] of Object.entries(result.changedCommands ?? {})) {
+        if (cmd && !inferredChangedCommands[gate as GateId]) {
+          inferredChangedCommands[gate as GateId] = cmd;
         }
       }
       result.notableFiles.forEach((f) => notableFiles.add(f));
@@ -86,6 +92,7 @@ export function analyzeProject(root: string, config: HarnessConfig, logger: Logg
     name: config.project.name,
     technologies,
     inferredCommands,
+    inferredChangedCommands,
     layout,
     notableFiles: [...notableFiles].sort(),
     notes: previous?.notes ?? [],

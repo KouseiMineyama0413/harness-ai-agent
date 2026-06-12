@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS events (
   ts TEXT NOT NULL,
   agent TEXT NOT NULL,
   kind TEXT NOT NULL,
-  text TEXT NOT NULL
+  text TEXT NOT NULL,
+  usd REAL NOT NULL DEFAULT 0,
+  tokens INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent);
 CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
@@ -103,7 +105,7 @@ export class HarnessDb {
         "INSERT INTO sessions (id, title, status, started_at, ended_at, agents) VALUES (?, ?, ?, ?, ?, ?)",
       );
       const insEvent = this.db.prepare(
-        "INSERT INTO events (session_id, ts, agent, kind, text) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO events (session_id, ts, agent, kind, text, usd, tokens) VALUES (?, ?, ?, ?, ?, ?, ?)",
       );
       const insPrompt = this.db.prepare(
         "INSERT INTO prompts (ts, agent, session_id, text) VALUES (?, ?, ?, ?)",
@@ -113,7 +115,9 @@ export class HarnessDb {
         insSession.run(s.id, s.title, s.status, s.startedAt, s.endedAt ?? null, s.agents.join(","));
         counts.sessions++;
         for (const e of loadEvents(this.root, s.id)) {
-          insEvent.run(s.id, e.ts, e.agent, e.kind, e.text);
+          const usd = e.data?.usd ?? 0;
+          const tokens = (e.data?.tokensIn ?? 0) + (e.data?.tokensOut ?? 0) + (e.data?.tokens ?? 0);
+          insEvent.run(s.id, e.ts, e.agent, e.kind, e.text, usd, tokens);
           counts.events++;
         }
       }
@@ -143,7 +147,16 @@ export class HarnessDb {
     const get = (agent: string): AgentActivity => {
       let row = byAgent.get(agent);
       if (!row) {
-        row = { agent, sessions: 0, prompts: 0, decisions: 0, notes: 0, lastActive: null };
+        row = {
+          agent,
+          sessions: 0,
+          prompts: 0,
+          decisions: 0,
+          notes: 0,
+          costUsd: 0,
+          tokens: 0,
+          lastActive: null,
+        };
         byAgent.set(agent, row);
       }
       return row;
@@ -157,14 +170,25 @@ export class HarnessDb {
         "SELECT agent, COUNT(DISTINCT session_id) AS sessions, " +
           "SUM(CASE WHEN kind = 'decision' THEN 1 ELSE 0 END) AS decisions, " +
           "SUM(CASE WHEN kind = 'note' THEN 1 ELSE 0 END) AS notes, " +
+          "SUM(usd) AS usd, SUM(tokens) AS tokens, " +
           "MAX(ts) AS last FROM events GROUP BY agent",
       )
-      .all() as { agent: string; sessions: number; decisions: number; notes: number; last: string }[];
+      .all() as {
+      agent: string;
+      sessions: number;
+      decisions: number;
+      notes: number;
+      usd: number;
+      tokens: number;
+      last: string;
+    }[];
     for (const r of eventRows) {
       const row = get(r.agent);
       row.sessions = r.sessions;
       row.decisions = r.decisions;
       row.notes = r.notes;
+      row.costUsd = Math.round(r.usd * 10000) / 10000;
+      row.tokens = r.tokens;
       bump(row, r.last);
     }
 

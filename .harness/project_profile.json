@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-06-12T04:08:40.192Z",
+  "generatedAt": "2026-06-12T04:55:19.378Z",
   "root": "/Users/kosei-mineyama/src/environment/peakcode/base-harness",
   "name": "dev-harness",
   "technologies": [
@@ -26,12 +26,15 @@
     }
   ],
   "inferredCommands": {
-    "lint": "npm run lint",
-    "typecheck": "npm run typecheck",
-    "test": "npm run test",
-    "build": "npm run build",
-    "deps": "npm audit --audit-level=high",
-    "security": "npm audit --audit-level=high"
+    "lint": "pnpm run lint",
+    "typecheck": "pnpm run typecheck",
+    "test": "pnpm run test",
+    "build": "pnpm run build",
+    "deps": "pnpm audit --audit-level high",
+    "security": "pnpm audit --audit-level high"
+  },
+  "inferredChangedCommands": {
+    "test": "npx vitest related --run {files}"
   },
   "layout": {
     "src/": "application source",

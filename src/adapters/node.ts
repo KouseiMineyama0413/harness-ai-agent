@@ -96,6 +96,14 @@ export const nodeAdapter: StackAdapter = {
       pm === "pnpm" ? "pnpm audit --audit-level high" : pm === "yarn" ? "yarn npm audit" : "npm audit --audit-level=high";
     commands.security = commands.deps;
 
+    const changedCommands: Partial<Record<GateId, string>> = {};
+    if (deps["vitest"]) {
+      changedCommands.test = "npx vitest related --run {files}";
+    } else if (deps["jest"]) {
+      changedCommands.test = "npx jest --findRelatedTests {files} --passWithNoTests";
+    }
+    if (deps["eslint"]) changedCommands.lint = "npx eslint {files}";
+
     const notableFiles = [
       "package.json",
       "tsconfig.json",
@@ -106,6 +114,6 @@ export const nodeAdapter: StackAdapter = {
       "vite.config.ts",
     ].filter((f) => fileExists(path.join(root, f)));
 
-    return { technologies, commands, notableFiles };
+    return { technologies, commands, changedCommands, notableFiles };
   },
 };

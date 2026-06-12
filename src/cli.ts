@@ -19,7 +19,13 @@ import { gatesPassed, runGates } from "./gates/runner.js";
 import { checkCommand } from "./guardrails/commandPolicy.js";
 import { checkDiff, isGitRepo } from "./guardrails/diffBudget.js";
 import { DB_PATH, HarnessDb } from "./db/database.js";
-import { integrateClaude, integrateCodex } from "./integrations/install.js";
+import { runDoctor } from "./doctor/doctor.js";
+import { addClaim, listClaims, releaseAgentClaims, releaseClaim } from "./guardrails/claims.js";
+import { integrateClaude, integrateCodex, integrateGitHooks } from "./integrations/install.js";
+import { startMcpServer } from "./mcp/server.js";
+import { createPlan, listPlans, loadPlan, setPlanStatus } from "./plans/plans.js";
+import { buildPrSummary } from "./report/prSummary.js";
+import { summarizeSession } from "./session/summarize.js";
 import { buildGateReport, listReports, renderMarkdown, writeReport } from "./report/reporter.js";
 import {
   appendEvent,
@@ -148,8 +154,12 @@ gate
   .command("run")
   .description("run quality gates and write a report")
   .option("--only <gates>", `comma-separated subset of: ${ALL_GATE_IDS.join(",")}`)
+  .option(
+    "--changed [base]",
+    "scope gates to changed files (vs working tree, or vs a base ref); gates with a changedCommand template run scoped",
+  )
   .option("--no-report", "skip writing a report file")
-  .action(async (opts: { only?: string; report: boolean }) => {
+  .action(async (opts: { only?: string; changed?: string | boolean; report: boolean }) => {
     const { root, config, logger } = ctx();
     const profile = loadProfile(root) ?? analyzeProject(root, config, logger);
 
@@ -163,7 +173,24 @@ gate
       }
     }
 
-    const results = await runGates(root, config, profile, logger, only);
+    let changedFiles: string[] | undefined;
+    if (opts.changed !== undefined && opts.changed !== false) {
+      if (!isGitRepo(root)) {
+        logger.error("--changed requires a git repository");
+        process.exit(EXIT_USAGE);
+      }
+      const base = typeof opts.changed === "string" ? opts.changed : undefined;
+      const { execFileSync } = await import("node:child_process");
+      const out = execFileSync(
+        "git",
+        ["diff", "--name-only", "--diff-filter=d", ...(base ? [`${base}...HEAD`] : ["HEAD"])],
+        { cwd: root, encoding: "utf8" },
+      ).trim();
+      changedFiles = out ? out.split("\n") : [];
+      logger.info(`changed files: ${changedFiles.length}`);
+    }
+
+    const results = await runGates(root, config, profile, logger, { only, changedFiles });
     const passed = gatesPassed(results);
     const report = buildGateReport(config.project.name, results, passed);
 
@@ -197,16 +224,17 @@ guard
 
 guard
   .command("scan-diff")
-  .description("check current diff against change budget, protected paths, and secret introduction")
+  .description("check current diff against change budget, protected paths, claims, plan, and secrets")
   .option("--base <ref>", "compare against a base ref (CI: origin/main) instead of working tree")
+  .option("--agent <name>", "agent performing the change (for claim conflicts)", "human")
   .option("--json", "print result JSON")
-  .action((opts: { base?: string; json?: boolean }) => {
+  .action((opts: { base?: string; agent: string; json?: boolean }) => {
     const { root, config, logger } = ctx();
     if (!isGitRepo(root)) {
       logger.error("not a git repository — guard scan-diff requires git");
       process.exit(EXIT_USAGE);
     }
-    const result = checkDiff(root, config, opts.base);
+    const result = checkDiff(root, config, { baseRef: opts.base, agent: opts.agent });
     if (opts.json) process.stdout.write(JSON.stringify(result, null, 2) + "\n");
     else {
       process.stdout.write(
@@ -261,6 +289,123 @@ req
     for (const r of listRequirements(root)) {
       process.stdout.write(`${r.id}  [${r.status}]  ${r.title}  (${r.file})\n`);
     }
+  });
+
+// ---------------------------------------------------------------- claim
+const claim = program.command("claim").description("exclusive work claims (concurrent-agent conflict prevention)");
+
+claim
+  .command("add <path>")
+  .description("claim a file or directory so other agents don't touch it")
+  .option("--agent <name>", "claiming agent", "human")
+  .option("--reason <text>", "why this claim exists")
+  .action((claimPath: string, opts: { agent: string; reason?: string }) => {
+    const { root, logger } = ctx();
+    try {
+      const c = addClaim(root, claimPath, opts.agent, opts.reason);
+      process.stdout.write(`claimed ${c.path} for ${c.agent}\n`);
+    } catch (err) {
+      logger.error((err as Error).message);
+      process.exit(EXIT_CHECK_FAILED);
+    }
+  });
+
+claim
+  .command("release <path>")
+  .description("release a claim you hold")
+  .option("--agent <name>", "agent releasing", "human")
+  .action((claimPath: string, opts: { agent: string }) => {
+    const { root, logger } = ctx();
+    try {
+      releaseClaim(root, claimPath, opts.agent);
+      process.stdout.write(`released ${claimPath}\n`);
+    } catch (err) {
+      logger.error((err as Error).message);
+      process.exit(EXIT_CHECK_FAILED);
+    }
+  });
+
+claim
+  .command("release-all")
+  .description("release every claim held by an agent")
+  .requiredOption("--agent <name>", "agent whose claims to release")
+  .action((opts: { agent: string }) => {
+    const { root } = ctx();
+    const n = releaseAgentClaims(root, opts.agent);
+    process.stdout.write(`released ${n} claim(s) held by ${opts.agent}\n`);
+  });
+
+claim
+  .command("list")
+  .description("list active claims")
+  .action(() => {
+    const { root } = ctx();
+    for (const c of listClaims(root)) {
+      process.stdout.write(
+        `${c.path}  (${c.agent}${c.sessionId ? `, ${c.sessionId}` : ""}, since ${c.claimedAt})${c.reason ? `  — ${c.reason}` : ""}\n`,
+      );
+    }
+  });
+
+// ---------------------------------------------------------------- plan
+const plan = program.command("plan").description("implementation plans (.harness/plans/) — humans approve before agents change code");
+
+plan
+  .command("new <title>")
+  .description("create a draft plan")
+  .option("--req <id>", "linked requirement id (REQ-xxx)")
+  .option("--step <step...>", "plan steps (repeatable)")
+  .action((title: string, opts: { req?: string; step?: string[] }) => {
+    const { root } = ctx();
+    const { plan: created, file } = createPlan(root, title, {
+      requirement: opts.req,
+      steps: opts.step,
+    });
+    process.stdout.write(`${created.id} created (${path.relative(root, file)}). Approve with: harness plan approve ${created.id}\n`);
+  });
+
+for (const [status, desc] of [
+  ["approved", "approve a plan (human sign-off)"],
+  ["rejected", "reject a plan"],
+  ["completed", "mark an approved plan as completed"],
+] as const) {
+  plan
+    .command(`${status === "approved" ? "approve" : status === "rejected" ? "reject" : "complete"} <id>`)
+    .description(desc)
+    .option("--by <name>", "who is approving")
+    .action((id: string, opts: { by?: string }) => {
+      const { root, logger } = ctx();
+      try {
+        const updated = setPlanStatus(root, id, status, opts.by);
+        process.stdout.write(`${updated.id} is now ${updated.status}\n`);
+      } catch (err) {
+        logger.error((err as Error).message);
+        process.exit(EXIT_CHECK_FAILED);
+      }
+    });
+}
+
+plan
+  .command("list")
+  .description("list plans")
+  .action(() => {
+    const { root } = ctx();
+    for (const p of listPlans(root)) {
+      process.stdout.write(`${p.id}  [${p.status}]  ${p.title}${p.requirement ? `  (${p.requirement})` : ""}\n`);
+    }
+  });
+
+plan
+  .command("show <id>")
+  .description("show a plan")
+  .action((id: string) => {
+    const { root, logger } = ctx();
+    const p = loadPlan(root, id);
+    if (!p) {
+      logger.error(`plan not found: ${id}`);
+      process.exit(EXIT_USAGE);
+    }
+    process.stdout.write(JSON.stringify(p, null, 2) + "\n");
   });
 
 // ---------------------------------------------------------------- session
@@ -345,6 +490,48 @@ for (const kind of ["note", "decision"] as const) {
       logger.info(`${kind} recorded in ${result.sessionId}`);
     });
 }
+
+session
+  .command("cost")
+  .description("record token/cost usage for the active session (shows up in team activity)")
+  .option("--usd <amount>", "cost in USD")
+  .option("--tokens-in <n>", "input tokens")
+  .option("--tokens-out <n>", "output tokens")
+  .option("--note <text>", "what the cost was for")
+  .option("--agent <name>", "agent name", "human")
+  .action((opts: { usd?: string; tokensIn?: string; tokensOut?: string; note?: string; agent: string }) => {
+    const { root, logger } = ctx();
+    const data: Record<string, number> = {};
+    if (opts.usd) data.usd = Number.parseFloat(opts.usd);
+    if (opts.tokensIn) data.tokensIn = Number.parseInt(opts.tokensIn, 10);
+    if (opts.tokensOut) data.tokensOut = Number.parseInt(opts.tokensOut, 10);
+    if (Object.keys(data).length === 0 || Object.values(data).some((v) => Number.isNaN(v))) {
+      logger.error("provide at least one numeric value: --usd, --tokens-in, --tokens-out");
+      process.exit(EXIT_USAGE);
+    }
+    const result = appendEvent(root, "cost", opts.note ?? "cost recorded", opts.agent, { data });
+    if (!result.sessionId) {
+      logger.error("no active session — run `harness session start` first");
+      process.exit(EXIT_CHECK_FAILED);
+    }
+    logger.info(`cost recorded in ${result.sessionId}`);
+  });
+
+session
+  .command("summarize [id]")
+  .description("summarize a session with an LLM and fold lessons into the project profile (defaults to active/latest session)")
+  .option("--agent <name>", "agent name", "human")
+  .action(async (id: string | undefined, opts: { agent: string }) => {
+    const { root, config, logger } = ctx();
+    try {
+      const { session: s, file, summary } = await summarizeSession(root, config, opts.agent, id);
+      logger.info(`summary written to ${path.relative(root, file)}`);
+      process.stdout.write(`# ${s.title} (${s.id})\n\n${summary.trim()}\n`);
+    } catch (err) {
+      logger.error((err as Error).message);
+      process.exit(EXIT_CHECK_FAILED);
+    }
+  });
 
 session
   .command("handoff")
@@ -493,13 +680,15 @@ team
       }
       process.stdout.write(
         renderTable(
-          ["agent", "sessions", "prompts", "decisions", "notes", "last active"],
+          ["agent", "sessions", "prompts", "decisions", "notes", "tokens", "usd", "last active"],
           rows.map((r) => [
             r.agent,
             String(r.sessions),
             String(r.prompts),
             String(r.decisions),
             String(r.notes),
+            String(r.tokens),
+            r.costUsd > 0 ? `$${r.costUsd.toFixed(4)}` : "-",
             r.lastActive ?? "-",
           ]),
         ),
@@ -553,19 +742,72 @@ program
 
 // ---------------------------------------------------------------- integrate
 program
-  .command("integrate <agent>")
-  .description("install agent integration: claude (prompt hook + CLAUDE.md) or codex (AGENTS.md)")
-  .action((agent: string) => {
+  .command("integrate <target>")
+  .description("install integration: claude (prompt hook + CLAUDE.md), codex (AGENTS.md), git-hooks (pre-commit/pre-push)")
+  .action((target: string) => {
     const { root, logger } = ctx();
     let changes: string[];
-    if (agent === "claude") changes = integrateClaude(root);
-    else if (agent === "codex") changes = integrateCodex(root);
-    else {
-      logger.error(`unknown agent "${agent}" — supported: claude, codex`);
-      process.exit(EXIT_USAGE);
+    try {
+      if (target === "claude") changes = integrateClaude(root);
+      else if (target === "codex") changes = integrateCodex(root);
+      else if (target === "git-hooks") changes = integrateGitHooks(root);
+      else {
+        logger.error(`unknown target "${target}" — supported: claude, codex, git-hooks`);
+        process.exit(EXIT_USAGE);
+        return;
+      }
+    } catch (err) {
+      logger.error((err as Error).message);
+      process.exit(EXIT_CHECK_FAILED);
+      return;
     }
     if (changes.length === 0) process.stdout.write("already integrated — nothing to do\n");
     for (const c of changes) process.stdout.write(`+ ${c}\n`);
+  });
+
+// ---------------------------------------------------------------- doctor
+program
+  .command("doctor")
+  .description("diagnose the environment: node, sqlite, git, config, profile, gates, claims, integrations")
+  .option("--json", "print JSON")
+  .action(async (opts: { json?: boolean }) => {
+    const root = path.resolve(program.opts<{ cwd: string }>().cwd);
+    const checks = await runDoctor(root);
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(checks, null, 2) + "\n");
+    } else {
+      for (const c of checks) {
+        const icon = { ok: "✅", warn: "⚠️ ", fail: "❌" }[c.status];
+        process.stdout.write(`${icon} ${c.name.padEnd(20)} ${c.detail}\n`);
+      }
+    }
+    process.exit(checks.some((c) => c.status === "fail") ? EXIT_CHECK_FAILED : EXIT_OK);
+  });
+
+// ---------------------------------------------------------------- pr-summary
+program
+  .command("pr-summary")
+  .description("generate a PR description from session decisions, diff stats, and the latest gate report")
+  .option("--base <ref>", "base ref to diff against (e.g. origin/main)")
+  .option("--out <file>", "also write to a file (for gh pr create --body-file)")
+  .action((opts: { base?: string; out?: string }) => {
+    const { root, config, logger } = ctx();
+    const summary = buildPrSummary(root, config, opts.base);
+    if (opts.out) {
+      writeText(path.resolve(root, opts.out), summary);
+      logger.info(`written to ${opts.out}`);
+    }
+    process.stdout.write(summary);
+  });
+
+// ---------------------------------------------------------------- mcp
+program
+  .command("mcp")
+  .description("run the harness as an MCP server over stdio (register in Claude Code / Codex)")
+  .action(async () => {
+    const { root, config } = ctx();
+    await startMcpServer(root, config);
+    // Keep the process alive; the transport owns stdin/stdout from here.
   });
 
 // ---------------------------------------------------------------- report
@@ -592,6 +834,7 @@ stacks: []
 
 agent:
   requirePlan: true
+  enforcePlan: false   # true = guard scan-diff fails without an approved plan (.harness/plans/)
   changeBudget:
     maxFiles: 20
     maxLinesAdded: 800
@@ -601,6 +844,12 @@ agent:
     - infra/
   deniedCommands: []   # extra regexes, e.g. 'kubectl .* --context prod'
   allowedCommands: []  # exact/regex allowlist that bypasses the policy
+
+llm:                   # used by "harness session summarize"
+  provider: anthropic
+  # model: claude-opus-4-8
+  apiKeyEnv: ANTHROPIC_API_KEY
+  maxTokens: 2048
 
 # Each gate: command (overrides auto-detection; null disables), required, timeoutSec
 gates: {}
