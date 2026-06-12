@@ -8,7 +8,7 @@ import path from "node:path";
 import { loadProfile, PROFILE_PATH } from "../analyze/analyzer.js";
 import type { HarnessConfig } from "../config/schema.js";
 import { writeJson, writeText } from "../core/fsutil.js";
-import { getProvider } from "../llm/provider.js";
+import { resolveProvider } from "../llm/provider.js";
 import type { Session, SessionEvent } from "../types.js";
 import { appendEvent, getActiveSession, listSessions, loadEvents, SESSIONS_DIR } from "./store.js";
 
@@ -44,7 +44,7 @@ export async function summarizeSession(
     throw new Error(`session ${session.id} has no substantive events to summarize`);
   }
 
-  const provider = getProvider(config.llm.provider);
+  const provider = resolveProvider(config.llm);
   const summary = await provider.complete(
     {
       system: SYSTEM_PROMPT,

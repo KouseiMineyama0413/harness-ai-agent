@@ -46,9 +46,14 @@ export { createPlan, setPlanStatus, listPlans, loadPlan, hasApprovedPlan, PLANS_
 export { buildPrSummary } from "./report/prSummary.js";
 export { runDoctor, type DoctorCheck } from "./doctor/doctor.js";
 export { summarizeSession } from "./session/summarize.js";
-export { getProvider, registerProvider, type LlmProvider } from "./llm/provider.js";
+export { getProvider, resolveProvider, registerProvider, type LlmProvider } from "./llm/provider.js";
+export { claudeCliProvider, claudeCliAvailable } from "./llm/claudeCli.js";
 export { startMcpServer } from "./mcp/server.js";
 export { integrateGitHooks } from "./integrations/install.js";
+export { upsertMarkedBlock, beginMarker, endMarker, generatedFileHeader, isGeneratedFile } from "./core/markers.js";
+export { syncSkillAndCommands, renderSkill, SKILL_PATH, COMMANDS_DIR } from "./integrations/skill.js";
+export { generateDocs, checkDocs, DOC_TYPES, type DocType } from "./docs/generate.js";
+export { collectDocSources, renderSources, type DocSource } from "./docs/sources.js";
 export { registerAdapter, getAdapters } from "./adapters/registry.js";
 export type { StackAdapter, AdapterDetection } from "./adapters/types.js";
 export { Logger } from "./core/logger.js";

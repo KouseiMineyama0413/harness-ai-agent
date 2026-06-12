@@ -11,14 +11,13 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { readIfExists, readJsonIfExists, writeJson, writeText } from "../core/fsutil.js";
+import { readIfExists, readJsonIfExists, writeJson } from "../core/fsutil.js";
+import { upsertMarkedBlock } from "../core/markers.js";
 
-const MARKER = "<!-- dev-harness:integration -->";
 const HOOK_COMMAND = "harness session prompt --from-claude-hook";
 
 function agentRules(agent: "claude" | "codex"): string {
   const lines = [
-    MARKER,
     "## dev-harness",
     "",
     "This repository uses dev-harness for shared agent sessions, prompt history, and guardrails.",
@@ -38,19 +37,16 @@ function agentRules(agent: "claude" | "codex"): string {
   }
   lines.push(
     `4. Log key design decisions: \`harness session decision "<text>" --agent ${agent}\`.`,
-    `5. Check risky commands first: \`harness guard check-command "<cmd>"\`. Run \`harness gate run\` after changes.`,
-    `6. Before stopping: \`harness session handoff --agent ${agent}\` so the other agent can continue.`,
-    "",
+    `5. Claim shared areas before editing them: \`harness claim add <path> --agent ${agent}\`; release when done.`,
+    `6. Check risky commands first: \`harness guard check-command "<cmd>"\`. Run \`harness gate run\` (or \`--changed\`) after changes.`,
+    `7. Before stopping: \`harness session handoff --agent ${agent}\` so the other agent can continue.`,
   );
   return lines.join("\n");
 }
 
-function appendRulesIfMissing(file: string, agent: "claude" | "codex"): boolean {
-  const existing = readIfExists(file);
-  if (existing?.includes(MARKER)) return false;
-  const content = existing ? existing.trimEnd() + "\n\n" + agentRules(agent) : agentRules(agent);
-  writeText(file, content);
-  return true;
+/** Upsert the managed rules block; returns true when the file changed. */
+function syncRules(file: string, agent: "claude" | "codex"): boolean {
+  return upsertMarkedBlock(file, "integration", agentRules(agent)) !== "unchanged";
 }
 
 interface ClaudeSettings {
@@ -72,16 +68,16 @@ export function integrateClaude(root: string): string[] {
     changes.push(`.claude/settings.json: added UserPromptSubmit hook (auto prompt history)`);
   }
 
-  if (appendRulesIfMissing(path.join(root, "CLAUDE.md"), "claude")) {
-    changes.push("CLAUDE.md: added dev-harness session rules");
+  if (syncRules(path.join(root, "CLAUDE.md"), "claude")) {
+    changes.push("CLAUDE.md: dev-harness rules block synced");
   }
   return changes;
 }
 
 export function integrateCodex(root: string): string[] {
   const changes: string[] = [];
-  if (appendRulesIfMissing(path.join(root, "AGENTS.md"), "codex")) {
-    changes.push("AGENTS.md: added dev-harness session rules (Codex reads AGENTS.md)");
+  if (syncRules(path.join(root, "AGENTS.md"), "codex")) {
+    changes.push("AGENTS.md: dev-harness rules block synced (Codex reads AGENTS.md)");
   }
   return changes;
 }

@@ -12,15 +12,12 @@ export const anthropicProvider: LlmProvider = {
   id: "anthropic",
 
   async complete(req: CompletionRequest, config: HarnessConfig["llm"]): Promise<string> {
-    const apiKey = process.env[config.apiKeyEnv];
-    if (!apiKey) {
-      throw new Error(
-        `${config.apiKeyEnv} is not set — export it or change llm.apiKeyEnv in harness.yaml`,
-      );
-    }
-
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey });
+    // When the configured env var is unset, fall back to the SDK's default
+    // credential resolution (ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN /
+    // `ant auth login` profile) instead of failing immediately.
+    const apiKey = process.env[config.apiKeyEnv];
+    const client = apiKey ? new Anthropic({ apiKey }) : new Anthropic();
 
     const response = await client.messages.create({
       model: config.model ?? DEFAULT_MODEL,

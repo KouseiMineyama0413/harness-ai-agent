@@ -75,7 +75,13 @@ export const harnessConfigSchema = z
       .default({}),
     llm: z
       .object({
-        provider: z.enum(["anthropic"]).default("anthropic"),
+        /**
+         * auto = API key if set, otherwise the local Claude Code session
+         * (claude -p). Pin to "anthropic" or "claude-cli" to force one.
+         */
+        provider: z.enum(["auto", "anthropic", "claude-cli"]).default("auto"),
+        /** Path to the claude binary (default "claude"; env HARNESS_CLAUDE_BIN wins). */
+        claudeBin: z.string().optional(),
         model: z.string().optional(),
         apiKeyEnv: z.string().default("ANTHROPIC_API_KEY"),
         maxTokens: z.number().int().positive().max(64000).default(2048),

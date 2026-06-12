@@ -54,6 +54,9 @@ harness gate run    # 品質ゲート実行 → .harness/reports/
 | `harness doctor` | 環境診断(node / sqlite / git / 設定 / 統合) |
 | `harness integrate git-hooks` | pre-commit(scan-diff)/ pre-push(gate run)を設置 |
 | `harness mcp` | MCP サーバーとして起動(エージェントがネイティブツールとして利用) |
+| `harness skill sync` | Claude Code の skill / slash command を project 知識から生成・更新 |
+| `harness docs generate [--only a,b] [--force]` | docs が無いサービスに LLM で docs を生成 |
+| `harness docs check [--strict]` | docs の欠落・陳腐化を検出(CI 向け) |
 | `harness integrate claude\|codex` | エージェント統合のインストール(hook / AGENTS.md) |
 | `harness report list` | 生成済みレポート一覧 |
 
@@ -152,9 +155,39 @@ claude mcp add harness -- harness mcp
 
 公開ツール: `get_context` / `run_gates` / `check_command` / `scan_diff` / `record_event` / `search_history` / `team_activity` / `claim_paths` / `write_handoff`。エージェントはシェル経由ではなくネイティブのツール呼び出しで harness を使えます。
 
-## セッション要約(LLM)
+## LLM 機能の認証(session summarize / docs generate)
 
-`harness session summarize` がセッションのイベントログを Anthropic API(公式 SDK、デフォルト `claude-opus-4-8`)で要約し、`<id>.summary.md` に保存、教訓を `project_profile.json` の notes に追記します(→ 次回以降の `harness context` に自動掲載)。`ANTHROPIC_API_KEY` が必要。プロバイダは `LlmProvider` インターフェースで差し替え可能です。
+`llm.provider: auto`(デフォルト)が以下の順で解決します — **API キーが無くてもローカルの Claude Code ログインだけで動きます**:
+
+1. `ANTHROPIC_API_KEY`(または `llm.apiKeyEnv` で指定した env)があれば → **anthropic**(公式 SDK、デフォルト `claude-opus-4-8`)。env が無くても SDK のデフォルト解決(`ANTHROPIC_AUTH_TOKEN` / `ant auth login` プロファイル)が効きます
+2. ローカルに Claude Code(`claude` CLI)があれば → **claude-cli**(`claude -p` headless モード。**今ログイン中の Claude Code セッション/サブスクリプションで実行**、API キー不要)
+
+`llm.provider: anthropic | claude-cli` で固定も可能。CI ではキーを使う `anthropic` を推奨します。PATH 上に複数の claude がある環境では `HARNESS_CLAUDE_BIN` 環境変数か `llm.claudeBin` でバイナリを固定できます。
+
+`harness session summarize` はセッションのイベントログを要約して `<id>.summary.md` に保存し、教訓を `project_profile.json` の notes に追記します(→ 次回以降の `harness context` / `skill sync` に自動反映)。プロバイダは `LlmProvider` インターフェースで追加可能です。
+
+## Skill / slash command の自動生成
+
+`harness skill sync` が project 知識(スタック・コマンド・ガードレール・蓄積された教訓)から Claude Code 用アーティファクトを生成・更新します:
+
+```
+.claude/skills/dev-harness/SKILL.md   # プロジェクト規約 skill(harness が完全管理・冪等)
+.claude/commands/harness-gate.md      # /harness-gate    ゲート実行と要約
+.claude/commands/harness-handoff.md   # /harness-handoff 引き継ぎして終了
+.claude/commands/harness-plan.md      # /harness-plan    計画作成→承認依頼
+.claude/commands/harness-pr.md        # /harness-pr      PR説明文生成
+```
+
+LLM は使わず決定的に生成されるため CI で毎回回せます。`session summarize` で教訓が増えるたびに sync すれば skill が育ちます。また CLAUDE.md / AGENTS.md は **marker 区間置換**(`<!-- dev-harness:integration -->` 〜 `<!-- /dev-harness:integration -->`)で管理され、`integrate` 再実行で区間内だけが更新されます — 人間が書いた部分には一切触れません。
+
+## docs 自動生成
+
+docs が無いサービスに対し、`harness docs generate` が **architecture / api / onboarding** の3種を LLM で下書きします:
+
+- 材料はリポジトリ全体ではなく、**サイズ上限付きの抽出**(layout、manifest、エントリポイント、ルート定義、.env.example、migration 一覧など計64KB以内)
+- 出力は `docs/*.md` に AUTO-GENERATED ヘッダ付きで保存。**人間が書いたファイルは `--force` でも絶対に上書きしない**(harness 生成ファイルのみ `--force` で再生成可)
+- 不明な点は捏造せず `TODO (confirm):` として出力するようプロンプトで強制
+- `harness docs check --strict` が README/docs の欠落・陳腐化(ソースより30日以上古い)を検出し CI で fail にできる
 
 ## AI エージェント連携
 
