@@ -1,5 +1,7 @@
 # dev-harness
 
+**English version: [README.en.md](README.en.md)**
+
 あらゆるアプリケーション開発(Web / API / SaaS / CLI / AIアプリ / 業務システム)で共通利用できる、フレームワーク非依存の **development harness** です。要件定義 → 設計 → 実装 → テスト → レビュー → CI までの開発ループに、**品質ゲート**と **AIエージェント向けガードレール**を提供します。
 
 ## 設計思想
@@ -65,13 +67,13 @@ harness gate run    # 品質ゲート実行 → .harness/reports/
 
 ## 品質ゲート
 
-`lint` / `typecheck` / `test` / `build` / `security` / `deps` / `coverage` の 7 種。コマンド解決順:
+`lint` / `typecheck` / `test` / `build` / `security` / `deps` / `coverage` / `breaking` の 8 種。コマンド解決順:
 
 1. `harness.yaml` の `gates.<id>.command`(`null` なら無効化)
 2. アダプタの自動推定(例: package.json の scripts、`go test ./...`、`pytest`)
 3. どちらも無ければ skip(理由付き)
 
-`security` / `deps` / `coverage` はデフォルト advisory(失敗しても全体は落とさない)。`required: true` で昇格できます。
+`security` / `deps` / `coverage` はデフォルト advisory(失敗しても全体は落とさない)。`required: true` で昇格できます。`breaking` は設定専用(oasdiff / api-extractor 等を明示設定したときのみ実行)。
 
 ## セッション共有と prompt 履歴(Claude ⇄ Codex)
 
@@ -253,20 +255,28 @@ src/
   config/                # harness.yaml スキーマ(zod)とローダー
   adapters/              # スタック別アダプタ(node/python/go/infra)+ registry
   analyze/               # プロファイル生成(.harness/project_profile.json)
+  context/               # エージェント向けコンテキスト・チューニングパック・brief
   gates/                 # 品質ゲート解決・実行
-  guardrails/            # コマンドポリシー / secret 検出 / diff 予算
-  context/               # エージェント向け構造化コンテキスト生成
-  report/                # Markdown/JSON レポート
+  guardrails/            # コマンドポリシー / secret 検出 / diff 予算 / claim
+  plans/                 # 実装計画(承認ライフサイクル)
+  session/               # 共有セッション・prompt 履歴・summarize
+  db/                    # SQLite クエリインデックス(node:sqlite)
+  llm/                   # LLM プロバイダ(anthropic SDK / claude CLI)
+  docs/                  # docs 材料抽出・生成
+  integrations/          # claude/codex/git-hooks インストーラ・skill sync
+  mcp/                   # MCP サーバー
+  report/                # Markdown/JSON レポート・PR サマリ
   requirements/          # 構造化要件と曖昧さ linter
+  doctor/                # 環境診断
 templates/               # CI テンプレート
 ```
 
 ## 拡張
 
 - **新しいスタック**: `StackAdapter` を実装し `registerAdapter()`(`src/adapters/registry.ts`)。コア変更不要。
-- **プラグイン(将来)**: `harness.yaml` の `plugins:` から外部アダプタを動的ロード。
-- **LLM Provider Adapter(将来)**: `context.json` は provider 非依存の中間表現。各 provider 向けプロンプト整形を adapter 化。
+- **新しい LLM プロバイダ**: `LlmProvider` を実装し `registerProvider()`(`src/llm/provider.ts`)。
 - **追加ゲート**: `GateId` を拡張し、`defaultRequired` とアダプタ推定を追加。
+- **プラグイン(将来)**: `harness.yaml` の `plugins:` から外部アダプタを動的ロード。
 
 ## 開発
 
