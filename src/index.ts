@@ -9,6 +9,8 @@ export { loadConfig, ConfigError, CONFIG_FILENAME } from "./config/load.js";
 export { analyzeProject, loadProfile, PROFILE_PATH } from "./analyze/analyzer.js";
 export { runGates, resolveGates, gatesPassed, parseCoverage, substituteChanged } from "./gates/runner.js";
 export { generateContext, renderContextMarkdown } from "./context/generator.js";
+export { tuningRules } from "./context/tuning.js";
+export { buildBrief, type BriefOptions } from "./context/brief.js";
 export { buildGateReport, writeReport, renderMarkdown, listReports } from "./report/reporter.js";
 export { checkCommand } from "./guardrails/commandPolicy.js";
 export { redactSecrets, findSecrets } from "./guardrails/secrets.js";

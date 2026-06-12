@@ -10,6 +10,7 @@ import type { HarnessConfig } from "../config/schema.js";
 import { writeJson, writeText } from "../core/fsutil.js";
 import { getActiveSession, loadEvents, PROMPT_HISTORY_PATH } from "../session/store.js";
 import type { AgentContext, ProjectProfile } from "../types.js";
+import { tuningRules } from "./tuning.js";
 
 const BASE_RULES = [
   "Present a plan and get approval before making changes (requirePlan).",
@@ -68,6 +69,9 @@ export function generateContext(
     git: gitInfo(root),
   };
 
+  const tuning = tuningRules(config);
+  if (tuning) context.tuning = tuning;
+
   const session = getActiveSession(root);
   if (session) {
     context.session = {
@@ -120,8 +124,14 @@ export function renderContextMarkdown(ctx: AgentContext, profile: ProjectProfile
   for (const rule of ctx.guardrails.rules) lines.push(`- ${rule}`);
   lines.push("");
 
+  if (ctx.tuning) {
+    lines.push(`## Operating instructions (tuned for ${ctx.tuning.target})`);
+    for (const rule of ctx.tuning.rules) lines.push(`- ${rule}`);
+    lines.push("");
+  }
+
   if (profile.notes.length > 0) {
-    lines.push("## Project notes");
+    lines.push("## Project lessons");
     for (const note of profile.notes) lines.push(`- ${note}`);
     lines.push("");
   }

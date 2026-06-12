@@ -13,6 +13,7 @@ import path from "node:path";
 import { writeText } from "../core/fsutil.js";
 import { generatedFileHeader } from "../core/markers.js";
 import type { HarnessConfig } from "../config/schema.js";
+import { tuningRules } from "../context/tuning.js";
 import { readIfExists } from "../core/fsutil.js";
 import type { ProjectProfile } from "../types.js";
 
@@ -71,6 +72,13 @@ export function renderSkill(profile: ProjectProfile, config: HarnessConfig): str
   lines.push("5. After changes: `harness guard scan-diff --agent claude` and `harness gate run --changed`.");
   lines.push("6. Before stopping: `harness session handoff --agent claude`.");
   lines.push("");
+
+  const tuning = tuningRules(config);
+  if (tuning) {
+    lines.push(`## Operating instructions (tuned for ${tuning.target})`);
+    for (const rule of tuning.rules) lines.push(`- ${rule}`);
+    lines.push("");
+  }
 
   if (profile.notes.length > 0) {
     lines.push("## Project lessons (accumulated from past sessions)");

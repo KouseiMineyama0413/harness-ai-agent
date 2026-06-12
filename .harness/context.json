@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-06-12T04:08:40.194Z",
+  "generatedAt": "2026-06-12T05:26:39.380Z",
   "project": {
     "name": "dev-harness",
     "root": "/Users/kosei-mineyama/src/environment/peakcode/base-harness",
@@ -36,12 +36,12 @@
     ]
   },
   "commands": {
-    "lint": "npm run lint",
-    "typecheck": "npm run typecheck",
+    "lint": "pnpm run lint",
+    "typecheck": "pnpm run typecheck",
     "test": "npx vitest run",
     "build": "npm run build",
-    "deps": "npm audit --audit-level=high",
-    "security": "npm audit --audit-level=high"
+    "deps": "pnpm audit --audit-level high",
+    "security": "pnpm audit --audit-level high"
   },
   "guardrails": {
     "changeBudget": {
@@ -64,6 +64,26 @@
       "After changes, produce a diff summary: files touched, why, and risks.",
       "Keep adapters self-contained: stack knowledge never leaks into core modules.",
       "stdout is machine-readable output only; human messages go to stderr via Logger."
+    ]
+  },
+  "git": {
+    "branch": "main",
+    "dirtyFiles": 10
+  },
+  "tuning": {
+    "target": "Claude Opus 4.8",
+    "rules": [
+      "For minor choices (naming, formatting, default values, which of two equivalent approaches), pick a reasonable option and note it rather than asking. Ask first only for scope changes or destructive actions.",
+      "Before ending your turn, check your last paragraph. If it is a plan, a question you can answer yourself, or a promise about work you have not done, do that work now with tool calls.",
+      "When the answer depends on information not already in the conversation (current repo state, versions, recent changes), verify with tools before answering — do not answer from memory.",
+      "When work fans out across independent items (many files to read, many tests to run, many candidates to check), delegate to parallel subagents. Work directly for single-file reads or sequential edits.",
+      "Before any task longer than a few turns, read the project lessons in .harness/context.md. Record new non-obvious findings with `harness session note`/`decision` so they persist for future sessions.",
+      "Get the full task specification before starting long work: read the linked requirement and approved plan (or run `harness brief`) instead of discovering scope mid-run.",
+      "Default to silence between tool calls: one sentence when you find something load-bearing, change direction, or hit a blocker. Do not narrate routine actions. Finish with one or two sentences on the outcome.",
+      "Before reporting progress, audit each claim against a tool result from this session. Report only work you can point to evidence for; mark anything unverified as unverified.",
+      "When the user is describing a problem or asking a question, the deliverable is your assessment — report findings and stop. Do not apply fixes until asked.",
+      "On long tasks, run `harness gate run --changed` at natural checkpoints, not only at the end; treat a failing required gate as the next task.",
+      "When reviewing code, report every issue you find with a confidence and severity estimate; do not self-filter for importance — filtering happens downstream."
     ]
   }
 }

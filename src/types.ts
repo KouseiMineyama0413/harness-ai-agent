@@ -107,6 +107,11 @@ export interface AgentContext {
     branch?: string;
     dirtyFiles?: number;
   };
+  /** Model-specific operating instructions (tuning pack). */
+  tuning?: {
+    target: string;
+    rules: string[];
+  };
   /** Active shared session, so any agent can pick up where another left off. */
   session?: {
     id: string;

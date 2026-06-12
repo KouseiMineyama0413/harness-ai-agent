@@ -54,6 +54,7 @@ harness gate run    # 品質ゲート実行 → .harness/reports/
 | `harness doctor` | 環境診断(node / sqlite / git / 設定 / 統合) |
 | `harness integrate git-hooks` | pre-commit(scan-diff)/ pre-push(gate run)を設置 |
 | `harness mcp` | MCP サーバーとして起動(エージェントがネイティブツールとして利用) |
+| `harness brief [task] [--req id] [--plan id]` | 要件+計画+環境+完了条件を1つのキックオフプロンプトに合成 |
 | `harness skill sync` | Claude Code の skill / slash command を project 知識から生成・更新 |
 | `harness docs generate [--only a,b] [--force]` | docs が無いサービスに LLM で docs を生成 |
 | `harness docs check [--strict]` | docs の欠落・陳腐化を検出(CI 向け) |
@@ -165,6 +166,20 @@ claude mcp add harness -- harness mcp
 `llm.provider: anthropic | claude-cli` で固定も可能。CI ではキーを使う `anthropic` を推奨します。PATH 上に複数の claude がある環境では `HARNESS_CLAUDE_BIN` 環境変数か `llm.claudeBin` でバイナリを固定できます。
 
 `harness session summarize` はセッションのイベントログを要約して `<id>.summary.md` に保存し、教訓を `project_profile.json` の notes に追記します(→ 次回以降の `harness context` / `skill sync` に自動反映)。プロバイダは `LlmProvider` インターフェースで追加可能です。
+
+## Opus 4.8 チューニング(モデル性能の最大化)
+
+Claude Opus 4.8 は非常に高性能ですが、エージェント用途では既知のデフォルト挙動(ツール・サブエージェント・メモリに手が伸びにくい、些細な確認が多い、ナレーション過多、レビューで自己フィルタしすぎ)が性能を削ります。harness は **Anthropic 公式のモデル移行ガイダンスを蒸留したチューニングパック**を `context.md` / `SKILL.md` / `brief` に自動注入してこれを補正します(`agent.tuning: auto`、`none` で無効化)。
+
+含まれる規則: 些細な選択は確認せず進める / ターン終了前の未実行宣言チェック / 不明情報はツールで検証 / 独立作業のサブエージェント分配 / project lessons の参照と記録 / ツールコール間は沈黙デフォルト / 進捗報告はツール結果で裏取り / 質問には評価のみ返す / チェックポイントでのゲート実行 / レビューは全件報告(フィルタは下流)。
+
+**`harness brief`** — Opus 4.8 の長時間自律実行は「最初の1ターンに完全なタスク仕様を渡す」ことで最大化されます。要件(AC・NFR・スコープ外)+承認済み計画+スタック/コマンド+ガードレール+**検証可能な完了条件**+チューニング規則を1つのプロンプトに合成します:
+
+```bash
+harness brief --req REQ-001 | claude -p   # または生成結果をエージェントの最初の指示として貼り付け
+```
+
+教訓の蓄積ループ(`session summarize` → profile notes → `context` / `skill sync` / `brief` に自動反映)と組み合わせることで、使うほどプロジェクト固有の精度が上がります。
 
 ## Skill / slash command の自動生成
 

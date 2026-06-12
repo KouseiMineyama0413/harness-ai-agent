@@ -19,6 +19,7 @@ import { gatesPassed, runGates } from "./gates/runner.js";
 import { checkCommand } from "./guardrails/commandPolicy.js";
 import { checkDiff, isGitRepo } from "./guardrails/diffBudget.js";
 import { DB_PATH, HarnessDb } from "./db/database.js";
+import { buildBrief } from "./context/brief.js";
 import { checkDocs, DOC_TYPES, generateDocs, type DocType } from "./docs/generate.js";
 import { runDoctor } from "./doctor/doctor.js";
 import { addClaim, listClaims, releaseAgentClaims, releaseClaim } from "./guardrails/claims.js";
@@ -800,6 +801,33 @@ program
       logger.info(`written to ${opts.out}`);
     }
     process.stdout.write(summary);
+  });
+
+// ---------------------------------------------------------------- brief
+program
+  .command("brief [task...]")
+  .description("compose a complete kickoff prompt (requirement + plan + commands + guardrails + done criteria) for an agent")
+  .option("--req <id>", "embed a requirement (REQ-xxx)")
+  .option("--plan <id>", "embed a plan (PLAN-xxx; default: latest approved)")
+  .option("--out <file>", "also write to a file")
+  .action((task: string[], opts: { req?: string; plan?: string; out?: string }) => {
+    const { root, config, logger } = ctx();
+    const profile = loadProfile(root) ?? analyzeProject(root, config, logger);
+    try {
+      const brief = buildBrief(root, config, profile, {
+        task: task.length > 0 ? task.join(" ") : undefined,
+        requirementId: opts.req,
+        planId: opts.plan,
+      });
+      if (opts.out) {
+        writeText(path.resolve(root, opts.out), brief);
+        logger.info(`written to ${opts.out}`);
+      }
+      process.stdout.write(brief);
+    } catch (err) {
+      logger.error((err as Error).message);
+      process.exit(EXIT_USAGE);
+    }
   });
 
 // ---------------------------------------------------------------- skill

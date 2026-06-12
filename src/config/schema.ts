@@ -35,6 +35,12 @@ export const harnessConfigSchema = z
     stacks: z.array(z.string()).default([]),
     agent: z
       .object({
+        /**
+         * Model tuning pack injected into context.md / SKILL.md.
+         * "auto" = the Opus 4.8 pack (documented agentic-behavior fixes);
+         * "none" disables it.
+         */
+        tuning: z.enum(["auto", "opus-4.8", "none"]).default("auto"),
         requirePlan: z.boolean().default(true),
         /**
          * Hard enforcement of requirePlan: `guard scan-diff` fails unless an

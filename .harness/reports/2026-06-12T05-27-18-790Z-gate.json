@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "kind": "gate",
+  "generatedAt": "2026-06-12T05:27:18.790Z",
+  "project": "dev-harness",
+  "summary": "All required gates passed (2 passed, 0 skipped).",
+  "passed": true,
+  "gates": [
+    {
+      "id": "test",
+      "status": "passed",
+      "command": "npx vitest run",
+      "exitCode": 0,
+      "durationMs": 1077,
+      "output": "\n\u001b[1m\u001b[7m\u001b[36m RUN \u001b[39m\u001b[27m\u001b[22m \u001b[36mv2.1.9 \u001b[39m\u001b[90m/Users/kosei-mineyama/src/environment/peakcode/base-harness\u001b[39m\n\n \u001b[32m✓\u001b[39m src/guardrails/commandPolicy.test.ts \u001b[2m(\u001b[22m\u001b[2m7 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 3\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/requirements/requirements.test.ts \u001b[2m(\u001b[22m\u001b[2m4 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 3\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/core/markers.test.ts \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 6\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/plans/plans.test.ts \u001b[2m(\u001b[22m\u001b[2m2 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 6\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/guardrails/claims.test.ts \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 8\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/session/store.test.ts \u001b[2m(\u001b[22m\u001b[2m7 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 14\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/integrations/skill.test.ts \u001b[2m(\u001b[22m\u001b[2m3 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 10\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/context/brief.test.ts \u001b[2m(\u001b[22m\u001b[2m4 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 8\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/gates/runner.test.ts \u001b[2m(\u001b[22m\u001b[2m8 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 7\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/docs/docs.test.ts \u001b[2m(\u001b[22m\u001b[2m4 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 15\u001b[2mms\u001b[22m\u001b[39m\n(node:92949) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n \u001b[32m✓\u001b[39m src/db/database.test.ts \u001b[2m(\u001b[22m\u001b[2m7 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 82\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m src/guardrails/secrets.test.ts \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 3\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m12 passed\u001b[39m\u001b[22m\u001b[90m (12)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m61 passed\u001b[39m\u001b[22m\u001b[90m (61)\u001b[39m\n\u001b[2m   Start at \u001b[22m 14:27:17\n\u001b[2m   Duration \u001b[22m 544ms\u001b[2m (transform 759ms, setup 0ms, collect 1.10s, tests 167ms, environment 1ms, prepare 1.03s)\u001b[22m\n\n",
+      "required": true
+    },
+    {
+      "id": "build",
+      "status": "passed",
+      "command": "pnpm run build",
+      "exitCode": 0,
+      "durationMs": 1196,
+      "output": "\n> @peakcode/dev-harness@0.1.0 build /Users/kosei-mineyama/src/environment/peakcode/base-harness\n> tsc -p tsconfig.json\n\n",
+      "required": true
+    }
+  ],
+  "unresolvedRisks": [],
+  "nextSteps": []
+}
