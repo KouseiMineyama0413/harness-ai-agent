@@ -18,7 +18,9 @@
 
 ```bash
 # 既存リポジトリで(リポジトリ自体には依存を追加しない)
-pnpm add -g @peakcode/dev-harness   # または pnpm dlx で都度実行
+pnpm add -g @kouseimineyama/harness-ai-agent   # または pnpm dlx で都度実行
+# npm 未公開の間は GitHub から:
+pnpm add -g github:KouseiMineyama0413/harness-ai-agent
 cd your-project
 harness init        # harness.yaml と .harness/ を生成
 harness analyze     # スタック検出 → .harness/project_profile.json

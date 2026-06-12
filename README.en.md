@@ -18,7 +18,9 @@ Requires **Node.js >= 22.5** (uses the built-in `node:sqlite`; no native depende
 
 ```bash
 # In an existing repository (adds no dependencies to the repo itself)
-pnpm add -g @peakcode/dev-harness   # or run ad hoc with pnpm dlx
+pnpm add -g @kouseimineyama/harness-ai-agent   # or run ad hoc with pnpm dlx
+# While unpublished on npm, install from GitHub:
+pnpm add -g github:KouseiMineyama0413/harness-ai-agent
 cd your-project
 harness init        # create harness.yaml and .harness/
 harness analyze     # detect the stack -> .harness/project_profile.json

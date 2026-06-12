@@ -31,9 +31,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install harness
-        run: pnpm add -g @peakcode/dev-harness
-        # During development, replace with:
-        # run: pnpm add -g github:Peakcode-Co-Ltd/dev-harness
+        run: pnpm add -g @kouseimineyama/harness-ai-agent
+        # While unpublished on npm, use:
+        # run: pnpm add -g github:KouseiMineyama0413/harness-ai-agent
 
       - name: Analyze project
         run: harness analyze

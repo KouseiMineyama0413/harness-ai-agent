@@ -1,8 +1,12 @@
 {
-  "name": "@peakcode/dev-harness",
+  "name": "@kouseimineyama/harness-ai-agent",
   "version": "0.1.0",
   "description": "Framework-agnostic development harness: project analysis, quality gates, AI-agent guardrails, structured context and reporting.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KouseiMineyama0413/harness-ai-agent.git"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.5.0"
