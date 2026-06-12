@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "PLAN-005",
+  "title": "Phase5: plugins / flaky検出 / 要件→テスト雛形",
+  "status": "draft",
+  "createdAt": "2026-06-12T07:14:25.374Z",
+  "steps": [
+    "harness.yaml plugins: から adapter/provider 動的ロード",
+    "test gate 失敗時の再実行による flaky 判定と profile 記録",
+    "req の AC から test skeleton を LLM 生成"
+  ]
+}

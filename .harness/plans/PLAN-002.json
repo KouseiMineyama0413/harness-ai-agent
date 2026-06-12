@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "PLAN-002",
+  "title": "Phase2: harness review — LLM diff レビュー",
+  "status": "draft",
+  "createdAt": "2026-06-12T07:14:24.979Z",
+  "steps": [
+    "diff 収集と review プロンプト(全件報告・confidence/severity付き)",
+    "findings を JSON/MD レポート保存、exit code 制御",
+    "gate id 'review' として登録可能に",
+    "CI テンプレートに PR コメント投稿を追加"
+  ]
+}

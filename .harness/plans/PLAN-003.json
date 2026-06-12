@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "PLAN-003",
+  "title": "Phase3: harness stats — メトリクス集計",
+  "status": "draft",
+  "createdAt": "2026-06-12T07:14:25.112Z",
+  "steps": [
+    "reports/*.json からゲート成功率の時系列集計",
+    "SQLite からセッション数・エージェント別コスト推移",
+    "stats コマンド(table/JSON出力)"
+  ]
+}

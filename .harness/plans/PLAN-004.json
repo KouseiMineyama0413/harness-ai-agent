@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "PLAN-004",
+  "title": "Phase4: harness work — worktree オーケストレーション",
+  "status": "draft",
+  "createdAt": "2026-06-12T07:14:25.243Z",
+  "steps": [
+    "work start: worktree+branch+session+claim をワンセット作成",
+    "work finish: gate→handoff→claim解放→worktree撤去",
+    "work list: 進行中ワークの一覧"
+  ]
+}

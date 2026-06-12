@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "PLAN-001",
+  "title": "Phase1: onboard / config sync / GitLab・CircleCI テンプレート",
+  "status": "draft",
+  "createdAt": "2026-06-12T07:14:24.848Z",
+  "steps": [
+    "harness onboard コマンド(init+analyze+integrate+skill sync+doctor)",
+    "harness config sync(推定と設定の差分提示、--write で反映)",
+    "templates/gitlab-ci.yml と circleci config テンプレート追加"
+  ]
+}
