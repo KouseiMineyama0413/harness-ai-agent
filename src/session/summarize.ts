@@ -9,6 +9,7 @@ import { loadProfile, PROFILE_PATH } from "../analyze/analyzer.js";
 import type { HarnessConfig } from "../config/schema.js";
 import { writeJson, writeText } from "../core/fsutil.js";
 import { resolveProvider } from "../llm/provider.js";
+import { compress } from "../compress/router.js";
 import type { Session, SessionEvent } from "../types.js";
 import { appendEvent, getActiveSession, listSessions, loadEvents, SESSIONS_DIR } from "./store.js";
 
@@ -24,7 +25,12 @@ const SYSTEM_PROMPT = [
 function renderEvents(events: SessionEvent[]): string {
   return events
     .filter((e) => e.kind !== "status")
-    .map((e) => `[${e.ts}] ${e.agent} ${e.kind}: ${e.text}`)
+    .map((e) => {
+      // A pasted log/JSON/diff in an event can dwarf the rest of the prompt;
+      // route it through the content compressors so the LLM sees the signal.
+      const text = e.text.length > 1000 ? compress(e.text).compressed : e.text;
+      return `[${e.ts}] ${e.agent} ${e.kind}: ${text}`;
+    })
     .join("\n");
 }
 

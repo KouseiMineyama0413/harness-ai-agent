@@ -26,6 +26,7 @@ import { NoTranscriptsError, runLearn } from "./learn/learn.js";
 import { analyzeAlignment, summarizeAlignment } from "./cache/aligner.js";
 import { compressReversible } from "./ccr/compress.js";
 import { getOriginal, listObjects, pruneExpired } from "./ccr/store.js";
+import { compress as routeCompress } from "./compress/router.js";
 import { addClaim, listClaims, releaseAgentClaims, releaseClaim } from "./guardrails/claims.js";
 import { integrateClaude, integrateCodex, integrateGitHooks } from "./integrations/install.js";
 import { syncSkillAndCommands } from "./integrations/skill.js";
@@ -914,6 +915,28 @@ docs
     }
     const bad = findings.some((f) => f.status !== "ok");
     process.exit(opts.strict && bad ? EXIT_CHECK_FAILED : EXIT_OK);
+  });
+
+// ---------------------------------------------------------------- compress
+program
+  .command("compress [file]")
+  .description("lossily compress JSON / logs / diffs (or stdin) for LLM input; keeps errors, structure, and changed lines")
+  .option("--as <type>", "force content type: json|log|diff|text")
+  .option("--min <chars>", "skip compression below this length", "500")
+  .option("--stats", "print the compression ratio to stderr")
+  .action(async (file: string | undefined, opts: { as?: string; min: string; stats?: boolean }) => {
+    const { root, logger } = ctx();
+    const input = file ? fs.readFileSync(path.resolve(root, file), "utf8") : await readStdin();
+    const result = routeCompress(input, {
+      as: opts.as as "json" | "log" | "diff" | "text" | undefined,
+      minChars: Number.parseInt(opts.min, 10) || 500,
+    });
+    if (opts.stats) {
+      logger.info(
+        `${result.contentType}: ${result.originalChars}→${result.compressedChars} chars (${(result.ratio * 100).toFixed(0)}% smaller)`,
+      );
+    }
+    process.stdout.write(result.compressed);
   });
 
 // ---------------------------------------------------------------- ccr
