@@ -23,6 +23,7 @@ import { buildBrief } from "./context/brief.js";
 import { checkDocs, DOC_TYPES, generateDocs, type DocType } from "./docs/generate.js";
 import { runDoctor } from "./doctor/doctor.js";
 import { NoTranscriptsError, runLearn } from "./learn/learn.js";
+import { analyzeAlignment, summarizeAlignment } from "./cache/aligner.js";
 import { addClaim, listClaims, releaseAgentClaims, releaseClaim } from "./guardrails/claims.js";
 import { integrateClaude, integrateCodex, integrateGitHooks } from "./integrations/install.js";
 import { syncSkillAndCommands } from "./integrations/skill.js";
@@ -149,7 +150,14 @@ program
     const profile = analyzeProject(root, config, logger);
     const context = generateContext(root, config, profile);
     logger.info("wrote .harness/context.json and .harness/context.md");
-    if (opts.print) process.stdout.write(renderContextMarkdown(context, profile) + "\n");
+    // Advise (don't rewrite) only when volatile tokens sit early enough to hurt
+    // the cache prefix; volatile content confined to the tail is expected.
+    const md = renderContextMarkdown(context, profile);
+    const report = analyzeAlignment(md);
+    if (report.findings.length > 0 && report.stablePrefixChars / Math.max(1, report.totalChars) < 0.8) {
+      logger.warn(`cache: ${summarizeAlignment(report)} — consider moving volatile fields toward the end`);
+    }
+    if (opts.print) process.stdout.write(md + "\n");
   });
 
 // ---------------------------------------------------------------- gate
@@ -901,6 +909,41 @@ docs
     }
     const bad = findings.some((f) => f.status !== "ok");
     process.exit(opts.strict && bad ? EXIT_CHECK_FAILED : EXIT_OK);
+  });
+
+// ---------------------------------------------------------------- cache
+const cache = program.command("cache").description("prompt-cache health (KV-cache prefix alignment)");
+cache
+  .command("check [file...]")
+  .description("detect volatile content (UUIDs, timestamps, hashes, JWTs) that breaks cache prefixes; defaults to .harness/context.md")
+  .option("--strict", "exit 1 when any volatile content is found (for CI)")
+  .option("--json", "print findings JSON")
+  .action((files: string[], opts: { strict?: boolean; json?: boolean }) => {
+    const { root } = ctx();
+    const targets = files.length > 0 ? files : [".harness/context.md"];
+    const reports = targets.map((rel) => {
+      const abs = path.resolve(root, rel);
+      const text = fileExists(abs) ? fs.readFileSync(abs, "utf8") : null;
+      return { file: rel, report: text === null ? null : analyzeAlignment(text) };
+    });
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(reports, null, 2) + "\n");
+    } else {
+      for (const { file, report } of reports) {
+        if (report === null) {
+          process.stdout.write(`?  ${file}  (not found)\n`);
+          continue;
+        }
+        const summary = summarizeAlignment(report);
+        const icon = report.score === 100 ? "✅" : report.score >= 70 ? "⚠️ " : "❌";
+        process.stdout.write(`${icon} ${file}  ${summary ?? "no volatile content (score 100/100)"}\n`);
+        for (const f of report.findings.slice(0, 10)) {
+          process.stdout.write(`     ${f.kind} @${f.offset}: ${f.token}\n`);
+        }
+      }
+    }
+    const anyVolatile = reports.some((r) => r.report !== null && r.report.findings.length > 0);
+    process.exit(opts.strict && anyVolatile ? EXIT_CHECK_FAILED : EXIT_OK);
   });
 
 // ---------------------------------------------------------------- learn

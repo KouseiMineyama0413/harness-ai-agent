@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-06-12T05:26:39.380Z",
+  "generatedAt": "2026-06-19T04:15:13.282Z",
   "project": {
     "name": "dev-harness",
     "root": "/Users/kosei-mineyama/src/environment/peakcode/base-harness",
@@ -39,7 +39,7 @@
     "lint": "pnpm run lint",
     "typecheck": "pnpm run typecheck",
     "test": "npx vitest run",
-    "build": "npm run build",
+    "build": "pnpm run build",
     "deps": "pnpm audit --audit-level high",
     "security": "pnpm audit --audit-level high"
   },
@@ -68,7 +68,7 @@
   },
   "git": {
     "branch": "main",
-    "dirtyFiles": 10
+    "dirtyFiles": 8
   },
   "tuning": {
     "target": "Claude Opus 4.8",
@@ -84,6 +84,33 @@
       "When the user is describing a problem or asking a question, the deliverable is your assessment — report findings and stop. Do not apply fixes until asked.",
       "On long tasks, run `harness gate run --changed` at natural checkpoints, not only at the end; treat a failing required gate as the next task.",
       "When reviewing code, report every issue you find with a confidence and severity estimate; do not self-filter for importance — filtering happens downstream."
+    ]
+  },
+  "session": {
+    "id": "S-001",
+    "title": "headroom技術の取り込み(learn/cache/ccr/compress)",
+    "agents": [
+      "claude"
+    ],
+    "recentEvents": [
+      {
+        "ts": "2026-06-19T04:05:41.624Z",
+        "agent": "claude",
+        "kind": "status",
+        "text": "session started: headroom技術の取り込み(learn/cache/ccr/compress)"
+      },
+      {
+        "ts": "2026-06-19T04:05:41.744Z",
+        "agent": "claude",
+        "kind": "decision",
+        "text": "headroom由来の4機能を純TSで段階導入。Phase1=harness learn(失敗マイニング→CLAUDE.md/notes)"
+      },
+      {
+        "ts": "2026-06-19T04:12:06.746Z",
+        "agent": "claude",
+        "kind": "decision",
+        "text": "Phase1 完了: harness learn を純TSで実装(transcripts/classify/digest/analyzer/writer)。実トランスクリプトでE2E検証、72テスト通過。"
+      }
     ]
   }
 }
