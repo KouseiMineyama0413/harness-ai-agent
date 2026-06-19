@@ -1,0 +1,2 @@
+{"ts":"2026-06-19T04:05:41.624Z","agent":"claude","kind":"status","text":"session started: headroom技術の取り込み(learn/cache/ccr/compress)"}
+{"ts":"2026-06-19T04:05:41.744Z","agent":"claude","kind":"decision","text":"headroom由来の4機能を純TSで段階導入。Phase1=harness learn(失敗マイニング→CLAUDE.md/notes)"}

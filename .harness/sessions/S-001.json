@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "S-001",
+  "title": "headroom技術の取り込み(learn/cache/ccr/compress)",
+  "status": "active",
+  "startedAt": "2026-06-19T04:05:41.623Z",
+  "agents": [
+    "claude"
+  ]
+}

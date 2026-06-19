@@ -22,6 +22,7 @@ import { DB_PATH, HarnessDb } from "./db/database.js";
 import { buildBrief } from "./context/brief.js";
 import { checkDocs, DOC_TYPES, generateDocs, type DocType } from "./docs/generate.js";
 import { runDoctor } from "./doctor/doctor.js";
+import { NoTranscriptsError, runLearn } from "./learn/learn.js";
 import { addClaim, listClaims, releaseAgentClaims, releaseClaim } from "./guardrails/claims.js";
 import { integrateClaude, integrateCodex, integrateGitHooks } from "./integrations/install.js";
 import { syncSkillAndCommands } from "./integrations/skill.js";
@@ -900,6 +901,57 @@ docs
     }
     const bad = findings.some((f) => f.status !== "ok");
     process.exit(opts.strict && bad ? EXIT_CHECK_FAILED : EXIT_OK);
+  });
+
+// ---------------------------------------------------------------- learn
+program
+  .command("learn")
+  .description(
+    "mine past agent transcripts for recurring failures + environment facts and fold them into CLAUDE.md / project notes",
+  )
+  .option("--apply", "write results (default is a dry-run preview)")
+  .option("--limit <n>", "scan at most N most-recent transcripts")
+  .option("--json", "print the analysis as JSON")
+  .action(async (opts: { apply?: boolean; limit?: string; json?: boolean }) => {
+    const { root, config, logger } = ctx();
+    const limit = opts.limit ? Number.parseInt(opts.limit, 10) : undefined;
+    if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0)) {
+      logger.error("--limit must be a positive integer");
+      process.exit(EXIT_USAGE);
+    }
+    try {
+      const result = await runLearn(root, config, { apply: opts.apply, limit });
+      if (opts.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+        return;
+      }
+      logger.info(
+        `scanned ${result.scannedTranscripts} transcript(s): ${result.totalToolCalls} tool calls, ${result.totalFailures} failures`,
+      );
+      const { contextRules, lessons } = result.analysis;
+      if (contextRules.length === 0 && lessons.length === 0) {
+        process.stdout.write("No durable patterns found worth recording.\n");
+        return;
+      }
+      for (const rule of contextRules) {
+        process.stdout.write(`\n## ${rule.section}  (evidence: ${rule.evidenceCount})\n${rule.content}\n`);
+      }
+      if (lessons.length > 0) {
+        process.stdout.write(`\n## Lessons\n${lessons.map((l) => `- ${l}`).join("\n")}\n`);
+      }
+      if (result.dryRun) {
+        process.stdout.write("\n(dry run — re-run with --apply to write to CLAUDE.md and project notes)\n");
+      } else {
+        logger.info(result.written.length > 0 ? `wrote: ${result.written.join(", ")}` : "no changes to write");
+      }
+    } catch (err) {
+      if (err instanceof NoTranscriptsError) {
+        logger.error(err.message);
+        process.exit(EXIT_USAGE);
+      }
+      logger.error((err as Error).message);
+      process.exit(EXIT_CHECK_FAILED);
+    }
   });
 
 // ---------------------------------------------------------------- mcp

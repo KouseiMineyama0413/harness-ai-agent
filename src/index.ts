@@ -48,6 +48,13 @@ export { createPlan, setPlanStatus, listPlans, loadPlan, hasApprovedPlan, PLANS_
 export { buildPrSummary } from "./report/prSummary.js";
 export { runDoctor, type DoctorCheck } from "./doctor/doctor.js";
 export { summarizeSession } from "./session/summarize.js";
+export { runLearn, NoTranscriptsError, type LearnOptions } from "./learn/learn.js";
+export { collectTraces, parseTranscript, claudeTranscriptDir } from "./learn/transcripts.js";
+export { buildDigest } from "./learn/digest.js";
+export { analyzeDigest } from "./learn/analyzer.js";
+export { writeLearnResults, renderLearnBlock, LEARN_MARKER_ID } from "./learn/writer.js";
+export { readMarkedBlock } from "./core/markers.js";
+export type { LearnResult, LearnAnalysis, LearnRecommendation, SessionTrace, ToolCallRecord, ErrorCategory } from "./learn/types.js";
 export { getProvider, resolveProvider, registerProvider, type LlmProvider } from "./llm/provider.js";
 export { claudeCliProvider, claudeCliAvailable } from "./llm/claudeCli.js";
 export { startMcpServer } from "./mcp/server.js";

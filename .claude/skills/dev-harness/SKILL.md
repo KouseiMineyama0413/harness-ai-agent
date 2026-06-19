@@ -15,7 +15,7 @@ description: Project conventions and dev-harness workflow for dev-harness. Use w
 - lint: `pnpm run lint`
 - typecheck: `pnpm run typecheck`
 - test: `npx vitest run`
-- build: `npm run build`
+- build: `pnpm run build`
 - deps: `pnpm audit --audit-level high`
 - security: `pnpm audit --audit-level high`
 

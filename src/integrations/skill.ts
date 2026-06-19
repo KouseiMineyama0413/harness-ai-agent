@@ -139,6 +139,15 @@ function slashCommands(): SlashCommand[] {
           "and offer to create the PR with `gh pr create --body-file <(harness pr-summary --base origin/main)`.",
       ].join("\n"),
     },
+    {
+      file: "harness-learn.md",
+      description: "過去のエージェント記録から繰り返す失敗・環境ルールを抽出し CLAUDE.md / プロジェクトノートに反映する",
+      body: [
+        "Mine past agent transcripts for recurring failures and environment facts with `harness learn $ARGUMENTS`.",
+        "Run `harness learn` first (dry run) to preview the proposed rules; review them for accuracy, " +
+          "then `harness learn --apply` to fold them into the CLAUDE.md managed block and project notes.",
+      ].join("\n"),
+    },
   ];
 }
 
