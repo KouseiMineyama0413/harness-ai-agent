@@ -17,6 +17,7 @@ import { addClaim, listClaims, releaseClaim } from "../guardrails/claims.js";
 import { checkCommand } from "../guardrails/commandPolicy.js";
 import { checkDiff, isGitRepo } from "../guardrails/diffBudget.js";
 import { buildGateReport, renderMarkdown, writeReport } from "../report/reporter.js";
+import { getOriginal } from "../ccr/store.js";
 import { appendEvent, writeHandoff } from "../session/store.js";
 import { ALL_GATE_IDS, type GateId } from "../types.js";
 
@@ -189,6 +190,17 @@ export async function startMcpServer(root: string, config: HarnessConfig): Promi
       } catch (err) {
         return errorText(err);
       }
+    },
+  );
+
+  server.tool(
+    "ccr_retrieve",
+    "Retrieve the full original content for a CCR handle. When you see a marker like `<<ccr:HASH:N chars omitted>>` in compressed context, call this with that HASH to get the omitted content.",
+    { hash: z.string().describe("The CCR handle from a <<ccr:...>> marker") },
+    async ({ hash }) => {
+      const original = getOriginal(root, hash);
+      if (original === null) return errorText(new Error(`no CCR object for handle "${hash}" (unknown or expired)`));
+      return text(original);
     },
   );
 

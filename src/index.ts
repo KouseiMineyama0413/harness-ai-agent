@@ -55,6 +55,8 @@ export { analyzeDigest } from "./learn/analyzer.js";
 export { writeLearnResults, renderLearnBlock, LEARN_MARKER_ID } from "./learn/writer.js";
 export { readMarkedBlock } from "./core/markers.js";
 export { analyzeAlignment, summarizeAlignment, type AlignmentReport, type VolatileFinding, type VolatileKind } from "./cache/aligner.js";
+export { compressReversible, formatMarker, type CcrOptions, type CcrResult } from "./ccr/compress.js";
+export { putOriginal, getOriginal, listObjects, pruneExpired, hashContent, isValidHandle, CCR_DIR, type CcrObject } from "./ccr/store.js";
 export type { LearnResult, LearnAnalysis, LearnRecommendation, SessionTrace, ToolCallRecord, ErrorCategory } from "./learn/types.js";
 export { getProvider, resolveProvider, registerProvider, type LlmProvider } from "./llm/provider.js";
 export { claudeCliProvider, claudeCliAvailable } from "./llm/claudeCli.js";

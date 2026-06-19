@@ -1,3 +1,4 @@
 {"ts":"2026-06-19T04:05:41.624Z","agent":"claude","kind":"status","text":"session started: headroom技術の取り込み(learn/cache/ccr/compress)"}
 {"ts":"2026-06-19T04:05:41.744Z","agent":"claude","kind":"decision","text":"headroom由来の4機能を純TSで段階導入。Phase1=harness learn(失敗マイニング→CLAUDE.md/notes)"}
 {"ts":"2026-06-19T04:12:06.746Z","agent":"claude","kind":"decision","text":"Phase1 完了: harness learn を純TSで実装(transcripts/classify/digest/analyzer/writer)。実トランスクリプトでE2E検証、72テスト通過。"}
+{"ts":"2026-06-19T04:15:26.979Z","agent":"claude","kind":"decision","text":"Phase2 完了: CacheAligner(揮発トークン検出/cache check)。context.md の generatedAt を末尾へ移し安定プレフィックスを1%→89%に改善。"}

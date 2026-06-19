@@ -24,6 +24,8 @@ import { checkDocs, DOC_TYPES, generateDocs, type DocType } from "./docs/generat
 import { runDoctor } from "./doctor/doctor.js";
 import { NoTranscriptsError, runLearn } from "./learn/learn.js";
 import { analyzeAlignment, summarizeAlignment } from "./cache/aligner.js";
+import { compressReversible } from "./ccr/compress.js";
+import { getOriginal, listObjects, pruneExpired } from "./ccr/store.js";
 import { addClaim, listClaims, releaseAgentClaims, releaseClaim } from "./guardrails/claims.js";
 import { integrateClaude, integrateCodex, integrateGitHooks } from "./integrations/install.js";
 import { syncSkillAndCommands } from "./integrations/skill.js";
@@ -106,10 +108,13 @@ program
     }
     const gitignore = path.join(root, ".harness", ".gitignore");
     if (!fileExists(gitignore)) {
-      writeText(gitignore, "logs/\ncache/\n");
+      writeText(gitignore, "logs/\ncache/\nccr/\n");
     } else {
-      const current = fs.readFileSync(gitignore, "utf8");
-      if (!current.includes("cache/")) writeText(gitignore, current.trimEnd() + "\ncache/\n");
+      let current = fs.readFileSync(gitignore, "utf8");
+      for (const entry of ["cache/", "ccr/"]) {
+        if (!current.includes(entry)) current = current.trimEnd() + `\n${entry}\n`;
+      }
+      writeText(gitignore, current);
     }
     logger.info("initialized .harness/ (commit reports/requirements, logs+cache are git-ignored)");
     logger.info("next: harness analyze && harness context");
@@ -909,6 +914,60 @@ docs
     }
     const bad = findings.some((f) => f.status !== "ok");
     process.exit(opts.strict && bad ? EXIT_CHECK_FAILED : EXIT_OK);
+  });
+
+// ---------------------------------------------------------------- ccr
+const ccr = program
+  .command("ccr")
+  .description("reversible compression store: offload large originals, retrieve on demand (Compress-Cache-Retrieve)");
+
+ccr
+  .command("retrieve <hash>")
+  .description("print the original content for a CCR handle from a <<ccr:hash:...>> marker")
+  .action((hash: string) => {
+    const { root, logger } = ctx();
+    const original = getOriginal(root, hash);
+    if (original === null) {
+      logger.error(`no CCR object for handle "${hash}" (unknown or expired)`);
+      process.exit(EXIT_CHECK_FAILED);
+    }
+    process.stdout.write(original);
+  });
+
+ccr
+  .command("compress [file]")
+  .description("reversibly compress a file (or stdin): keep head+tail, offload the middle, print the compressed form")
+  .option("--min <chars>", "minimum length before offloading", "2000")
+  .action(async (file: string | undefined, opts: { min: string }) => {
+    const { root, logger } = ctx();
+    const input = file ? fs.readFileSync(path.resolve(root, file), "utf8") : await readStdin();
+    const result = compressReversible(root, input, { minChars: Number.parseInt(opts.min, 10) || 2000 });
+    logger.info(
+      result.stored
+        ? `offloaded ${result.originalChars}→${result.compressedChars} chars (handle ${result.hash})`
+        : `below threshold (${result.originalChars} chars) — unchanged`,
+    );
+    process.stdout.write(result.compressed);
+  });
+
+ccr
+  .command("stats")
+  .description("show stored object count and total size")
+  .action(() => {
+    const { root } = ctx();
+    const objs = listObjects(root);
+    const bytes = objs.reduce((n, o) => n + o.bytes, 0);
+    process.stdout.write(`${objs.length} object(s), ${(bytes / 1024).toFixed(1)} KiB\n`);
+  });
+
+ccr
+  .command("prune")
+  .description("remove offloaded originals older than the retention window")
+  .option("--days <n>", "retention window in days", "7")
+  .action((opts: { days: string }) => {
+    const { root, logger } = ctx();
+    const removed = pruneExpired(root, Number.parseInt(opts.days, 10) || 7);
+    logger.info(`pruned ${removed} object(s)`);
   });
 
 // ---------------------------------------------------------------- cache
